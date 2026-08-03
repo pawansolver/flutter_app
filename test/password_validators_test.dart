@@ -21,6 +21,18 @@ void main() {
         validateNewPassword('Password1'),
         'Password must include a special character',
       );
+      expect(
+        validateNewPassword('PASSWORD1!'),
+        'Password must include a lowercase letter',
+      );
+      expect(
+        validateNewPassword('password1!'),
+        'Password must include an uppercase letter',
+      );
+      expect(
+        validateNewPassword(List.filled(19, 'Aa1!').join()),
+        'Password must be no more than 72 characters',
+      );
     });
   });
 

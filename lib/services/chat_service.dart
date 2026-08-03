@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 
 import '../core/api_config.dart';
 import '../models/chat_models.dart';
+import 'authenticated_dio.dart';
 
 export '../models/chat_models.dart';
 
@@ -35,7 +36,7 @@ class ChatService {
   factory ChatService() => _instance;
 
   ChatService._internal()
-    : _dio = Dio(),
+    : _dio = AuthenticatedDio().dio,
       _tokenProvider = _readStoredToken,
       _uuid = const Uuid();
 

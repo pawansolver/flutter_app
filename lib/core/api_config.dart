@@ -6,7 +6,7 @@ class ApiConfig {
   /// Phone aur computer same WiFi pe hone chahiye!
   /// Production ke liye wapas Render URL karo:
   /// 'https://smartgaliapi-77oa.onrender.com/api/v1'
-  static const String _productionUrl = 'http://192.168.31.15:5000/api/v1';
+  static const String _productionUrl = 'http://172.20.10.2:5000/api/v1';
 
   static const String _configuredUrl = String.fromEnvironment(
     'API_BASE_URL',
@@ -40,7 +40,7 @@ class ApiConfig {
   /// Base URL resolution (priority order):\
   ///  1. --dart-define=API_BASE_URL  → explicit override (always wins)
   ///  2. Emulator/Simulator session  → localhost URL (only via flutter run with RUN_ENV=emulator)
-  ///  3. Everything else             → Local machine IP (192.168.31.15:5000)
+  ///  3. Everything else             → Current local machine IP
   static String get baseUrl {
     String selected;
     if (_hasCustomUrl) {
@@ -85,6 +85,19 @@ class ApiConfig {
   static String get sendOtp => "$baseUrl/user-profile/send-otp";
   static String get verifyOtp => "$baseUrl/user-profile/verify-otp";
   static String get resendOtp => "$baseUrl/user-profile/resend-otp";
+
+  // ── Password authentication endpoints ─────────────────────────
+  static String get authSignup => "$baseUrl/auth/signup";
+  static String get authVerifyEmailOtp => "$baseUrl/auth/verify-email-otp";
+  static String get authCreatePassword => "$baseUrl/auth/create-password";
+  static String get authSignin => "$baseUrl/auth/signin";
+  static String get authForgotPassword => "$baseUrl/auth/forgot-password";
+  static String get authVerifyResetOtp => "$baseUrl/auth/verify-reset-otp";
+  static String get authResetPassword => "$baseUrl/auth/reset-password";
+  static String get authRefreshToken => "$baseUrl/auth/refresh-token";
+  static String get authLogout => "$baseUrl/auth/logout";
+  static String get authProfile => "$baseUrl/auth/profile";
+  static String get authAccount => "$baseUrl/auth/account";
 
   // ── Profile module endpoints ─────────────────────────────────
   static String get me => "$baseUrl/profile/me";

@@ -16,6 +16,7 @@ class SocketService {
 
   io.Socket? _socket;
   bool _isConnected = false;
+  int? _currentUserId;
 
   // Registered listeners
   final List<MessageCallback> _messageListeners = [];
@@ -31,6 +32,7 @@ class SocketService {
   /// Initialize and connect socket (call once after login)
   Future<void> connect(int userId) async {
     if (_socket != null) return;
+    _currentUserId = userId;
 
     final storage = const FlutterSecureStorage();
     final token = await storage.read(key: 'jwt_token');
@@ -207,6 +209,19 @@ class SocketService {
     _typingListeners.clear();
     _presenceListeners.clear();
     _joinedChatIds.clear();
+    _currentUserId = null;
+  }
+
+  /// Rebuilds an existing connection with the latest stored access token while
+  /// preserving screen listeners and joined rooms.
+  Future<void> reconnectWithLatestToken() async {
+    final userId = _currentUserId;
+    if (userId == null) return;
+    _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
+    _isConnected = false;
+    await connect(userId);
   }
 
   void _dispatchMessageEvent(

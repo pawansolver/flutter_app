@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/api_config.dart';
+import '../../services/authenticated_dio.dart';
 
 /// Generic result wrapper — separates success payload from error message.
 class NotificationResult<T> {
@@ -89,12 +90,15 @@ class NotificationFeed {
       items: rawItems is List
           ? rawItems
                 .whereType<Map>()
-                .map((e) => AppNotification.fromJson(Map<String, dynamic>.from(e)))
+                .map(
+                  (e) => AppNotification.fromJson(Map<String, dynamic>.from(e)),
+                )
                 .toList()
           : <AppNotification>[],
       unreadCount: int.tryParse(json['unreadCount']?.toString() ?? '0') ?? 0,
       page: int.tryParse(pagination['page']?.toString() ?? '1') ?? 1,
-      totalPages: int.tryParse(pagination['totalPages']?.toString() ?? '1') ?? 1,
+      totalPages:
+          int.tryParse(pagination['totalPages']?.toString() ?? '1') ?? 1,
     );
   }
 }
@@ -106,12 +110,7 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 15),
-    ),
-  );
+  final Dio _dio = AuthenticatedDio().dio;
   final _storage = const FlutterSecureStorage();
 
   Future<Options> _authOptions() async {
@@ -148,7 +147,9 @@ class NotificationService {
       );
       if (resp.statusCode == 200 && resp.data['success'] == true) {
         return NotificationResult.success(
-          NotificationFeed.fromJson(Map<String, dynamic>.from(resp.data['data'])),
+          NotificationFeed.fromJson(
+            Map<String, dynamic>.from(resp.data['data']),
+          ),
         );
       }
       return NotificationResult.failure(
@@ -196,7 +197,9 @@ class NotificationService {
         resp.data['message']?.toString() ?? 'Failed to mark as read',
       );
     } on DioException catch (e) {
-      return NotificationResult.failure(_extractError(e, 'Failed to mark as read'));
+      return NotificationResult.failure(
+        _extractError(e, 'Failed to mark as read'),
+      );
     } catch (_) {
       return const NotificationResult.failure('Something went wrong');
     }

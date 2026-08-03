@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/api_config.dart';
+import '../../services/authenticated_dio.dart';
 import 'models/feed_post_model.dart';
 
 /// Uses the shared, release-safe API configuration.
@@ -23,12 +24,7 @@ class FeedService {
   factory FeedService() => _instance;
   FeedService._internal();
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 15),
-    ),
-  );
+  final Dio _dio = AuthenticatedDio().dio;
   final _storage = const FlutterSecureStorage();
 
   // ── Private helper: get auth header ─────────────────────────────

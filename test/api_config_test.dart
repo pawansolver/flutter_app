@@ -8,6 +8,14 @@ void main() {
       expect(ApiConfig.baseUrl, isNot(endsWith('/')));
       expect(ApiConfig.me, '${ApiConfig.baseUrl}/profile/me');
       expect(ApiConfig.address(9), '${ApiConfig.baseUrl}/profile/addresses/9');
+      expect(ApiConfig.authSignup, '${ApiConfig.baseUrl}/auth/signup');
+      expect(ApiConfig.authSignin, '${ApiConfig.baseUrl}/auth/signin');
+      expect(
+        ApiConfig.authRefreshToken,
+        '${ApiConfig.baseUrl}/auth/refresh-token',
+      );
+      expect(ApiConfig.authProfile, '${ApiConfig.baseUrl}/auth/profile');
+      expect(ApiConfig.authAccount, '${ApiConfig.baseUrl}/auth/account');
     },
   );
 

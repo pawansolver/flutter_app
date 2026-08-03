@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'role_selection_screen.dart';
 import '../../services/auth_service.dart';
+import '../dashboard/main_dashboard.dart';
 
 class OtpScreen extends StatefulWidget {
   final String identity;
@@ -66,6 +67,7 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() => _isResending = true);
     try {
       bool isSent = await _authService.resendOtp(email: widget.identity);
+      if (!mounted) return;
       if (isSent) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("OTP resent successfully.")),
@@ -73,6 +75,7 @@ class _OtpScreenState extends State<OtpScreen> {
         _startResendTimer();
       }
     } catch (error) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.toString().replaceAll("Exception: ", ""))),
       );
@@ -102,6 +105,8 @@ class _OtpScreenState extends State<OtpScreen> {
         otp: completeOtp,
       );
       if (sessionData != null) {
+        final profile = await _authService.getAuthProfile();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Authentication successful! Welcome to smartgali."),
@@ -109,15 +114,20 @@ class _OtpScreenState extends State<OtpScreen> {
         );
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
+          MaterialPageRoute(
+            builder: (context) => profile['isProfileComplete'] == true
+                ? const MainDashboard()
+                : const RoleSelectionScreen(),
+          ),
         );
       }
     } catch (error) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.toString().replaceAll("Exception: ", ""))),
       );
     } finally {
-      setState(() => _isProcessing = false);
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 

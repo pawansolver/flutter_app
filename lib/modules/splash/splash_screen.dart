@@ -3,9 +3,10 @@ import 'dart:async';
 import '../auth/login_screen.dart';
 import '../../services/auth_service.dart';
 import '../dashboard/main_dashboard.dart';
+import '../auth/role_selection_screen.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({Key? key}) : super(key: key);
+  const SplashScreen({super.key});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -21,20 +22,24 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _checkLoginStatus() async {
     // Wait for at least 2 seconds so the splash screen is visible
     await Future.delayed(const Duration(seconds: 2));
-    
+
     if (!mounted) return;
 
     try {
       final authService = AuthService();
-      final token = await authService.getToken();
+      final hasSession = await authService.bootstrapSession();
 
       if (!mounted) return;
 
-      if (token != null && token.isNotEmpty) {
-        // User is already logged in → go to Main Dashboard (with bottom nav)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const MainDashboard()),
-        );
+      if (hasSession) {
+        final profile = await authService.getAuthProfile();
+        if (!mounted) return;
+        final destination = profile['isProfileComplete'] == true
+            ? const MainDashboard()
+            : const RoleSelectionScreen();
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (context) => destination));
       } else {
         // No token found, go to Login
         Navigator.of(context).pushReplacement(

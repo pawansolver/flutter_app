@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/api_config.dart';
+import '../../services/authenticated_dio.dart';
 
 /// Generic result wrapper — separates success payload from error message.
 class ProfileResult<T> {
@@ -160,12 +161,7 @@ class ProfileService implements AccountSecurityService {
   factory ProfileService() => _instance;
   ProfileService._internal();
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 15),
-    ),
-  );
+  final Dio _dio = AuthenticatedDio().dio;
   final _storage = const FlutterSecureStorage();
 
   Future<Options> _authOptions() async {
@@ -189,7 +185,10 @@ class ProfileService implements AccountSecurityService {
   @override
   Future<ProfileResult<UserProfileModel>> getMe() async {
     try {
-      final resp = await _dio.get(ApiConfig.me, options: await _authOptions());
+      final resp = await _dio.get(
+        ApiConfig.authProfile,
+        options: await _authOptions(),
+      );
       if (resp.statusCode == 200 && resp.data['success'] == true) {
         return ProfileResult.success(
           UserProfileModel.fromJson(
@@ -225,7 +224,7 @@ class ProfileService implements AccountSecurityService {
       if (longitude != null) body['longitude'] = longitude;
 
       final resp = await _dio.put(
-        ApiConfig.me,
+        ApiConfig.authProfile,
         data: body,
         options: await _authOptions(),
       );
@@ -626,7 +625,7 @@ class ProfileService implements AccountSecurityService {
   }) async {
     try {
       final resp = await _dio.delete(
-        ApiConfig.me,
+        ApiConfig.authAccount,
         data: {
           'confirm': true,
           if (password != null && password.isNotEmpty) 'password': password,
@@ -635,7 +634,7 @@ class ProfileService implements AccountSecurityService {
         options: await _authOptions(),
       );
       if (resp.statusCode == 200 && resp.data['success'] == true) {
-        await _storage.deleteAll();
+        await AuthenticatedDio().clearLocalSession();
         return const ProfileResult.success(true);
       }
       return ProfileResult.failure(

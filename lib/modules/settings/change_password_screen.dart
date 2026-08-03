@@ -168,7 +168,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  '• Minimum 8 characters long\n• Include at least one number\n• Include at least one special character',
+                                  '• 8–72 characters long\n• Include uppercase and lowercase letters\n• Include at least one number\n• Include at least one special character',
                                   style: TextStyle(
                                     color: Color(0xFF6B7280),
                                     fontSize: 13,

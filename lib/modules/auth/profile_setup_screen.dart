@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/api_config.dart';
+import '../../services/authenticated_dio.dart';
 import '../../shared/permission_guidance.dart';
 import '../dashboard/main_dashboard.dart';
 
@@ -45,14 +45,15 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   String? _bannerUrl; // URL returned by backend after upload
   bool _isUploadingBanner = false;
 
-  final _secureStorage = const FlutterSecureStorage();
-  final _dio = Dio();
+  final _dio = AuthenticatedDio().dio;
 
   @override
   void initState() {
     super.initState();
     if (widget.initialRole != null) {
-      _selectedRole = widget.initialRole!;
+      _selectedRole = widget.initialRole == 'Service Provider'
+          ? 'Provider'
+          : widget.initialRole!;
     }
   }
 
@@ -95,8 +96,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     });
 
     try {
-      final token = await _secureStorage.read(key: 'jwt_token');
-
       // Web doesn't have a real file path — readAsBytes() works on ALL platforms
       final bytes = await picked.readAsBytes();
       final formData = FormData.fromMap({
@@ -106,7 +105,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       final response = await _dio.post(
         '${ApiConfig.baseUrl}/user-profile/upload-banner',
         data: formData,
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
 
       final url = response.data['data']['bannerUrl'] as String;
@@ -264,7 +262,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     });
 
     try {
-      String? token = await _secureStorage.read(key: 'jwt_token');
       final Map<String, dynamic> data = {
         "role": _selectedRole.toLowerCase(),
         "fullName": _fullNameCtrl.text,
@@ -285,7 +282,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       final response = await _dio.put(
         '${ApiConfig.baseUrl}/user-profile/complete-setup',
         data: data,
-        options: Options(headers: {"Authorization": "Bearer $token"}),
       );
 
       if (response.statusCode == 200 && mounted) {
