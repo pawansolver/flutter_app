@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "SmartGali — Emulator (localhost API)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=RUN_ENV=emulator"
+      ]
+    },
+    {
+      "name": "SmartGali — Real Device / APK (Render API)",
+      "request": "launch",
+      "type": "dart"
+    }
+  ]
+}
