@@ -178,9 +178,16 @@ class ChatService {
         if (bytes.isEmpty) {
           throw const ChatServiceException('Attachment is empty.');
         }
+        
+        // On web, XFile.name can be empty for blob URLs.
+        String finalName = fileName ?? webFile.name;
+        if (finalName.trim().isEmpty) {
+          finalName = 'attachment_${DateTime.now().millisecondsSinceEpoch}.${mimeType?.split('/').last ?? 'bin'}';
+        }
+        
         attachment = MultipartFile.fromBytes(
           bytes,
-          filename: fileName ?? webFile.name,
+          filename: finalName,
           contentType: contentType,
         );
       } catch (error) {
@@ -192,26 +199,49 @@ class ChatService {
       if (!await file.exists()) {
         throw ChatServiceException('Attachment does not exist: $filePath');
       }
+      // Ensure we always send a filename; if caller omitted it use a timestamp + extension.
+      final generatedName = fileName ??
+          'attachment_${DateTime.now().millisecondsSinceEpoch}.${mimeType?.split('/').last ?? 'bin'}';
       attachment = await MultipartFile.fromFile(
         filePath,
-        filename: fileName,
+        filename: generatedName,
         contentType: contentType,
       );
     }
 
+
+
     try {
       final formData = FormData.fromMap({'attachment': attachment});
+      final options = await _authOptions();
+      
+      print('🚀 UPLOAD ATTACHMENT DEBUG 🚀');
+      print('URL: ${ApiConfig.uploadAttachment}');
+      print('File Path: $filePath');
+      print('File Name: $fileName');
+      print('MIME Type: $mimeType');
+      print('Headers: ${options.headers}');
+      print('FormData Fields: ${formData.fields}');
+      print('FormData Files: ${formData.files.map((e) => '${e.key}: ${e.value.filename} (${e.value.contentType})').toList()}');
+
+      // Do NOT pass contentType here — Dio auto-sets
+      // "multipart/form-data; boundary=..." when data is FormData.
+      // Manually overriding it strips the boundary, which causes multer
+      // on the server to fail parsing the body (req.file === undefined → 400).
       final response = await _dio.post(
         ApiConfig.uploadAttachment,
         data: formData,
-        options: await _authOptions(
-          contentType: Headers.multipartFormDataContentType,
-        ),
+        options: options,
         onSendProgress: onProgress,
         cancelToken: cancelToken,
       );
+      print('✅ UPLOAD SUCCESS: ${response.statusCode} - ${response.data}');
       return MediaAttachment.fromJson(_unwrapObject(response.data));
     } on DioException catch (error) {
+      print('❌ UPLOAD ERROR: ${error.type}');
+      print('Status Code: ${error.response?.statusCode}');
+      print('Error Response: ${error.response?.data}');
+      print('Error Message: ${error.message}');
       throw _mapDioException(error, 'Failed to upload attachment');
     } on FormatException catch (error) {
       throw ChatServiceException(error.message);

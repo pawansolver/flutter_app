@@ -4,9 +4,9 @@ import 'dart:io' show Platform;
 class ApiConfig {
   /// LOCAL TESTING MODE — real phone bhi local server se connect hoga
   /// Phone aur computer same WiFi pe hone chahiye!
-  /// Production ke liye wapas Render URL karo:
-  /// 'https://smartgaliapi-77oa.onrender.com/api/v1'
-  static const String _productionUrl = 'http://172.20.10.2:5000/api/v1';
+  /// 'https://api.smartgali.com/api/v1'
+  static const String _productionUrl = 'http://192.168.31.15:5000/api/v1';
+  // 'https://api.smartgali.com/api/v1'
 
   static const String _configuredUrl = String.fromEnvironment(
     'API_BASE_URL',
@@ -48,8 +48,8 @@ class ApiConfig {
     } else if (_isEmulator) {
       selected = _emulatorUrl;
     } else {
-      // Real phone → Local machine IP (same WiFi pe hona chahiye)
-      selected = _productionUrl;
+      // Direct localhost
+      selected = _emulatorUrl;
     }
     return selected.replaceFirst(RegExp(r'/+$'), '');
   }
