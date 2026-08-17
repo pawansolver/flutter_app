@@ -4,12 +4,26 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/api_config.dart';
 import 'auth_session.dart';
 import 'authenticated_dio.dart';
 
+// ─── Local notification plugin (singleton) ────────────────────────────────────
+final FlutterLocalNotificationsPlugin _localNotifications =
+    FlutterLocalNotificationsPlugin();
+
+const AndroidNotificationChannel _channel = AndroidNotificationChannel(
+  'smartgali_channel',
+  'Smartgali Notifications',
+  description: 'Notifications for Smartgali App',
+  importance: Importance.high,
+  playSound: true,
+);
+
+// ─── Background handler ────────────────────────────────────────────────────────
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
@@ -26,38 +40,87 @@ class NotificationService {
 
   Future<void> initialize() async {
     try {
-      // Request permissions
-      NotificationSettings settings = await _messaging.requestPermission(
+      // 1. Request permissions
+      final NotificationSettings settings =
+          await _messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
-        provisional: true,
+        provisional: false,
       );
+      log('FCM permission: ${settings.authorizationStatus}');
 
-      log('User granted notification permission: ${settings.authorizationStatus}');
+      // 2. Setup flutter_local_notifications
+      await _setupLocalNotifications();
 
-      // Background handler
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      // 3. Register FCM background handler
+      FirebaseMessaging.onBackgroundMessage(
+          _firebaseMessagingBackgroundHandler);
 
-      // Foreground handler
+      // 4. Foreground handler — show popup via local notifications
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        log('Foreground Notification: ${message.notification?.title}');
+        log('Foreground FCM received: ${message.notification?.title}');
+        _showLocalNotification(message);
       });
 
-      // Token refresh listener
-      _messaging.onTokenRefresh.listen(_onTokenRefresh);
+      // 5. Print token for testing
+      await getFcmToken();
 
+      // 6. Token refresh
+      _messaging.onTokenRefresh.listen(_onTokenRefresh);
     } catch (e) {
       log('FCM Initialization error: $e');
     }
   }
 
+  // ── Setup flutter_local_notifications ──────────────────────────────────────
+  Future<void> _setupLocalNotifications() async {
+    // Create the Android channel
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_channel);
+
+    const AndroidInitializationSettings androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const InitializationSettings initSettings =
+        InitializationSettings(android: androidSettings);
+
+    await _localNotifications.initialize(initSettings);
+  }
+
+  // ── Show a local popup notification ────────────────────────────────────────
+  void _showLocalNotification(RemoteMessage message) {
+    final notification = message.notification;
+    if (notification == null) return;
+
+    _localNotifications.show(
+      notification.hashCode,
+      notification.title,
+      notification.body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channel.id,
+          _channel.name,
+          channelDescription: _channel.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+      ),
+    );
+  }
+
+  // ── FCM Token ───────────────────────────────────────────────────────────────
   Future<String?> getFcmToken() async {
     try {
-      String? token = await _messaging.getToken();
+      final String? token = await _messaging.getToken();
       if (token != null) {
-        final maskedToken = token.length > 10 ? '${token.substring(0, 10)}...' : token;
-        log('FCM token received: $maskedToken');
+        print('====================================');
+        print('FCM TOKEN FOR TESTING:');
+        print(token);
+        print('====================================');
       }
       return token;
     } catch (e) {
@@ -68,7 +131,7 @@ class NotificationService {
 
   Future<void> _onTokenRefresh(String newToken) async {
     final token = await _store.readAccessToken();
-    if (token == null || token.isEmpty) return; // Not logged in
+    if (token == null || token.isEmpty) return;
 
     final deviceId = await _getDeviceId();
     if (deviceId == null) return;
@@ -77,9 +140,7 @@ class NotificationService {
       final dio = AuthenticatedDio().dio;
       await dio.put(
         ApiConfig.updateDevice(deviceId),
-        data: {
-          'pushToken': newToken,
-        },
+        data: {'pushToken': newToken},
       );
       log('FCM token refreshed and updated on backend.');
     } catch (e) {
@@ -87,9 +148,10 @@ class NotificationService {
     }
   }
 
+  // ── Device Registration ─────────────────────────────────────────────────────
   Future<void> registerDevice() async {
     final token = await _store.readAccessToken();
-    if (token == null || token.isEmpty) return; // Not logged in
+    if (token == null || token.isEmpty) return;
 
     final fcmToken = await getFcmToken();
     if (fcmToken == null) return;
@@ -106,11 +168,11 @@ class NotificationService {
       await dio.post(
         ApiConfig.registerDevice,
         data: {
-          "deviceId": deviceId,
-          "platform": platform,
-          "pushToken": fcmToken,
-          "appVersion": appVersion,
-          "deviceModel": deviceModel,
+          'deviceId': deviceId,
+          'platform': platform,
+          'pushToken': fcmToken,
+          'appVersion': appVersion,
+          'deviceModel': deviceModel,
         },
       );
       log('Device successfully registered with backend.');
@@ -121,7 +183,7 @@ class NotificationService {
 
   Future<void> deactivateDevice() async {
     final token = await _store.readAccessToken();
-    if (token == null || token.isEmpty) return; // Not logged in
+    if (token == null || token.isEmpty) return;
 
     try {
       final dio = AuthenticatedDio().dio;
@@ -132,12 +194,13 @@ class NotificationService {
     }
   }
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
   Future<String?> _getDeviceId() async {
     final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
     try {
       if (Platform.isAndroid) {
         final AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-        return androidInfo.id; // Unique ID on Android
+        return androidInfo.id;
       } else if (Platform.isIOS) {
         final IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
         return iosInfo.identifierForVendor;
@@ -174,3 +237,4 @@ class NotificationService {
     return '1.0.0';
   }
 }
+

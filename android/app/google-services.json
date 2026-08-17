@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "362429067451",
+    "project_id": "smartgali",
+    "storage_bucket": "smartgali.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:362429067451:android:3501ae54175485aa6ff99e",
+        "android_client_info": {
+          "package_name": "com.nighwantech.smartgali"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDFYJjIzQo_G82TBa6PPdSAwdwvoT-esRU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

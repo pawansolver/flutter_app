@@ -71,11 +71,11 @@ class ApiConfig {
 
     if (kReleaseMode && parsed.scheme != 'https') return null;
 
-    // Only rewrite localhost URLs when actually running on emulator/simulator.
-    if (_isEmulator &&
-        (parsed.host == 'localhost' || parsed.host == '127.0.0.1')) {
+    // Rewrite localhost URLs to baseUrl because physical phones cannot access localhost.
+    // This happens if the backend misconfigures its BASE_URL env var.
+    if (parsed.host == 'localhost' || parsed.host == '127.0.0.1') {
       final apiUri = Uri.parse(baseUrl);
-      return parsed.replace(host: apiUri.host, port: apiUri.port).toString();
+      return parsed.replace(scheme: apiUri.scheme, host: apiUri.host, port: apiUri.port).toString();
     }
 
     return parsed.toString();

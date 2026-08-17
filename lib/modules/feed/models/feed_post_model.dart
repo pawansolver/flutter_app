@@ -1,3 +1,5 @@
+import '../../../core/api_config.dart';
+
 /// Enterprise model — maps 1:1 with the backend feed timeline item
 class FeedPost {
   final int id;
@@ -47,13 +49,13 @@ class FeedPost {
         ? _safeString(userMap['fullName'], 'smartgali User')
         : 'smartgali User';
     final avatarUrl = userMap != null
-        ? (userMap['avatarUrl']?.toString())
+        ? ApiConfig.normalizeMediaUrl(userMap['avatarUrl']?.toString())
         : null;
 
     return FeedPost(
       id: _safeInt(json['id'], 0),
       content: _safeString(json['content'], ''),
-      mediaUrl: json['mediaUrl']?.toString(),
+      mediaUrl: ApiConfig.normalizeMediaUrl(json['mediaUrl']?.toString()),
       likesCount: _safeInt(json['likesCount'], 0),
       commentsCount: _safeInt(json['commentsCount'], 0),
       isLikedByMe: _safeBool(json['isLikedByMe'], false),
