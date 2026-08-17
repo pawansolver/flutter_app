@@ -48,8 +48,8 @@ class ApiConfig {
     } else if (_isEmulator) {
       selected = _emulatorUrl;
     } else {
-      // Direct localhost
-      selected = _emulatorUrl;
+      // Physical device default
+      selected = 'https://api.smartgali.com/api/v1';
     }
     return selected.replaceFirst(RegExp(r'/+$'), '');
   }
@@ -122,6 +122,11 @@ class ApiConfig {
       "$baseUrl/notification/me/read-all";
   static String markNotificationRead(int id) =>
       "$baseUrl/notification/$id/read";
+
+  // ── Device module endpoints ─────────────────────────────────
+  static String get registerDevice => "$baseUrl/device/register";
+  static String get deactivateDevice => "$baseUrl/device/deactivate";
+  static String updateDevice(String deviceId) => "$baseUrl/device/$deviceId";
 
   // ── Chat module endpoints ────────────────────────────────────
   static String get myChats => "$baseUrl/chat/my-chats";

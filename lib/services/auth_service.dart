@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../core/api_config.dart';
 import 'auth_session.dart';
 import 'authenticated_dio.dart';
+import 'notification_service.dart';
 import 'socket_service.dart';
 
 class AuthService {
@@ -104,6 +105,7 @@ class AuthService {
       );
       final session = AuthSession.fromEnvelope(response.data ?? const {});
       await _sessionStore.save(session);
+      await NotificationService().registerDevice();
       return session;
     } on DioException catch (error) {
       _throwDio(error, 'Sign in failed.');
@@ -237,6 +239,8 @@ class AuthService {
           userId: userId,
         );
 
+        await NotificationService().registerDevice();
+
         return {"token": token, "role": role, "userId": userId};
       }
       return null;
@@ -263,6 +267,7 @@ class AuthService {
   Future<void> logout() async {
     final refreshToken = await _sessionStore.readRefreshToken();
     try {
+      await NotificationService().deactivateDevice();
       if (refreshToken != null && refreshToken.isNotEmpty) {
         await _dio.post(
           ApiConfig.authLogout,

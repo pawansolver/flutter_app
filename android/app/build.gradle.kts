@@ -26,9 +26,9 @@ android {
         applicationId = "com.nighwantech.smartgali"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = 3
-        versionName = " 1.0.2"
-    }y
+        versionCode = 4
+        versionName = "1.0.3"
+    }
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties.getProperty("keyAlias")
