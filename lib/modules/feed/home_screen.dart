@@ -1,3 +1,4 @@
+import 'post_composer_screen.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -7,9 +8,11 @@ import 'package:share_plus/share_plus.dart';
 import '../../widgets/custom_drawer.dart';
 import '../core/notification_service.dart';
 import '../core/notifications_screen.dart';
+import '../profile/user_profile_screen.dart'; // PRD Phase 8: Follow system
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+import 'package:video_player/video_player.dart';
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -18,6 +21,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _service = FeedService();
   final _notificationService = NotificationService();
+  int? _currentUserId; // For author vs viewer context in PostCard
   Timer? _feedSyncTimer;
   Timer? _notifTimer;
   bool _isSyncingFeed = false;
@@ -39,10 +43,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadCurrentUser();
     _loadFeed();
     _startFeedSync();
     _refreshUnreadCount();
     _startNotificationSync();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    // Read userId from JWT stored in secure storage
+    final storage = const FlutterSecureStorage();
+    final token = await storage.read(key: 'jwt_token');
+    if (token == null) return;
+    try {
+      // Decode JWT payload (no verification needed - just reading our own value)
+      final parts = token.split('.');
+      if (parts.length != 3) return;
+      final payload = parts[1];
+      final normalized = base64Url.normalize(payload);
+      final decoded = utf8.decode(base64Url.decode(normalized));
+      final Map<String, dynamic> map = json.decode(decoded);
+      final uid = map['id'] ?? map['userId'] ?? map['sub'];
+      if (uid != null && mounted) setState(() => _currentUserId = int.tryParse(uid.toString()));
+    } catch (_) {}
   }
 
   void _startFeedSync() {
@@ -201,24 +224,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // ── Open Create Post ─────────────────────────────────────────────
   void _openCreatePost() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _CreatePostSheet(
-        service: _service,
-        onPosted: (newPost) {
-          setState(() => _posts.insert(0, newPost));
-        },
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PostComposerScreen(
+          service: _service,
+          onPosted: (newPost) {
+            setState(() => _posts.insert(0, newPost));
+          },
+        ),
       ),
     );
   }
 
   // ── Share Post ───────────────────────────────────────────────────
-  void _sharePost(FeedPost post) {
-    final text =
-        '📍 ${post.authorName} on smartgali:\n"${post.content}"\n\nJoin smartgali for hyperlocal updates!';
-    SharePlus.instance.share(ShareParams(text: text));
+void _sharePost(FeedPost post) async {
+    final text = '📌 ${post.authorName} on smartgali:\n"${post.content}"\n\nJoin smartgali for hyperlocal updates!';
+    await SharePlus.instance.share(ShareParams(text: text));
+    await _service.shareToFeed(post.id);
+    setState(() {
+      post.shareCount++;
+    });
   }
 
   String _formatTime(String? dateStr) {
@@ -273,8 +299,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           post: post,
                           service: _service,
                           formatTime: _formatTime,
-                          onComment: () => _openComments(post),
+                          currentUserId: _currentUserId,
+                          onComment: () async => _openComments(post),
                           onShare: () => _sharePost(post),
+                          onDeleted: () => setState(() => _posts.removeWhere((p) => p.id == post.id)),
                         ),
                       );
                     }),
@@ -600,15 +628,19 @@ class _PostCard extends StatefulWidget {
   final FeedPost post;
   final FeedService service;
   final String Function(String?) formatTime;
-  final VoidCallback onComment;
+  final int? currentUserId;
+  final Future<void> Function() onComment;
   final VoidCallback onShare;
+  final VoidCallback? onDeleted;
 
   const _PostCard({
     required this.post,
     required this.service,
     required this.formatTime,
+    this.currentUserId,
     required this.onComment,
     required this.onShare,
+    this.onDeleted,
   });
 
   @override
@@ -617,33 +649,44 @@ class _PostCard extends StatefulWidget {
 
 class _PostCardState extends State<_PostCard>
     with SingleTickerProviderStateMixin {
-  // ── Local like state — decoupled from parent ──────────────────────
+  // Enterprise: all counters tracked locally with optimistic updates
   late bool _isLiked;
   late int _likeCount;
+  late int _commentCount;
+  late int _shareCount;
+  late bool _isSaved;
 
-  // ── Guards ───────────────────────────────────────────────────────
-  bool _isPending = false; // block concurrent API calls
+  bool _likePending = false;
+  bool _savePending = false;
 
-  // ── Animation ────────────────────────────────────────────────────
   late AnimationController _scaleCtrl;
   late Animation<double> _scaleAnim;
 
   @override
   void initState() {
     super.initState();
-    _isLiked = widget.post.isLikedByMe;
-    _likeCount = widget.post.likesCount;
-
-    // Spring-like scale animation for like button
+    _syncFromPost();
     _scaleCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 150),
       reverseDuration: const Duration(milliseconds: 100),
     );
-    _scaleAnim = Tween<double>(
-      begin: 1.0,
-      end: 1.35,
-    ).animate(CurvedAnimation(parent: _scaleCtrl, curve: Curves.easeOut));
+    _scaleAnim = Tween<double>(begin: 1.0, end: 1.3)
+        .animate(CurvedAnimation(parent: _scaleCtrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void didUpdateWidget(_PostCard old) {
+    super.didUpdateWidget(old);
+    if (old.post.id != widget.post.id) _syncFromPost();
+  }
+
+  void _syncFromPost() {
+    _isLiked = widget.post.isLikedByMe;
+    _likeCount = widget.post.likesCount;
+    _commentCount = widget.post.commentsCount;
+    _shareCount = widget.post.shareCount;
+    _isSaved = widget.post.isSaved;
   }
 
   @override
@@ -652,195 +695,233 @@ class _PostCardState extends State<_PostCard>
     super.dispose();
   }
 
-  // ── Enterprise like handler ───────────────────────────────────────
-  // Pattern: Optimistic update → API call → server-sync or rollback
-  // Guard: _isPending prevents overlapping calls from rapid taps
+  // Enterprise Like: Optimistic UI -> API -> Server-sync / Rollback
   Future<void> _handleLike() async {
-    if (_isPending) return; // ← guard: ignore tap if call in-flight
-
-    // 1. Snapshot current state BEFORE mutation (avoids same-ref bug)
+    if (_likePending) return;
     final wasLiked = _isLiked;
     final prevCount = _likeCount;
-    final optimisticCount = wasLiked ? prevCount - 1 : prevCount + 1;
-
-    // 2. Optimistic UI — update immediately with correct values
-    setState(() {
-      _isLiked = !wasLiked;
-      _likeCount = optimisticCount;
-      _isPending = true;
-    });
-
-    // 3. Spring animation: scale up then back
-    await _scaleCtrl.forward();
-    _scaleCtrl.reverse();
-
-    // 4. API call
-    final result = await widget.service.toggleLike(widget.post.id);
+    setState(() { _isLiked = !wasLiked; _likeCount = wasLiked ? prevCount - 1 : prevCount + 1; _likePending = true; });
+    _scaleCtrl.forward().then((_) => _scaleCtrl.reverse());
+    final result = await widget.service.toggleLike(widget.post.id, isCurrentlyLiked: wasLiked);
     if (!mounted) return;
-
-    setState(() => _isPending = false);
-
+    setState(() => _likePending = false);
     if (!result.isSuccess) {
-      // 5a. Rollback to snapshot on failure
-      setState(() {
-        _isLiked = wasLiked;
-        _likeCount = prevCount;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.error ?? 'Could not update like'),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      setState(() { _isLiked = wasLiked; _likeCount = prevCount; });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.error ?? 'Could not like post'),
+        backgroundColor: Colors.red.shade600, behavior: SnackBarBehavior.floating,
+      ));
     } else {
-      // 5b. Server-sync: trust the DB-confirmed count (from post.reload())
-      final serverCount = result.data?['likesCount'];
-      final serverIsLiked = result.data?['isLikedByMe'] as bool?;
+      final sc = result.data?['likesCount'];
+      final sl = result.data?['isLikedByMe'];
       setState(() {
-        if (serverCount != null) {
-          _likeCount = serverCount is int
-              ? serverCount
-              : int.tryParse(serverCount.toString()) ?? _likeCount;
-        }
-        if (serverIsLiked != null) _isLiked = serverIsLiked;
+        if (sc != null) _likeCount = sc is int ? sc : int.tryParse(sc.toString()) ?? _likeCount;
+        if (sl is bool) _isLiked = sl;
       });
-      // Also sync parent model so refresh doesn't flicker
       widget.post.isLikedByMe = _isLiked;
       widget.post.likesCount = _likeCount;
     }
   }
 
+  // Enterprise Save: Optimistic toggle
+  Future<void> _handleSave() async {
+    if (_savePending) return;
+    final wasSaved = _isSaved;
+    setState(() { _isSaved = !wasSaved; _savePending = true; });
+    widget.post.isSaved = _isSaved;
+    final result = await widget.service.savePost(widget.post.id);
+    if (!mounted) return;
+    setState(() => _savePending = false);
+    if (!result.isSuccess) {
+      setState(() { _isSaved = wasSaved; });
+      widget.post.isSaved = wasSaved;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.error ?? 'Could not save post'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  // Called by comment sheet when a comment is added
+  void _onCommentAdded() {
+    setState(() { _commentCount++; widget.post.commentsCount = _commentCount; });
+  }
+
+  // Called after share action
+  void _onShared() {
+    setState(() { _shareCount++; widget.post.shareCount = _shareCount; });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    final hasMedia = widget.post.hasMedia;
+    final hasText = widget.post.content.trim().isNotEmpty;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // ── Author Header ─────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: _avatarColor(widget.post.authorName),
-                  child: Text(
-                    _initials(widget.post.authorName),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                GestureDetector(
+                  onTap: widget.post.authorUserId != null
+                      ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: widget.post.authorUserId!, userName: widget.post.authorUserName ?? widget.post.authorName, fullName: widget.post.authorName, avatarUrl: widget.post.authorAvatarUrl)))
+                      : null,
+                  child: CircleAvatar(
+                    radius: 21,
+                    backgroundColor: _avatarColor(widget.post.authorName),
+                    backgroundImage: widget.post.authorAvatarUrl != null && widget.post.authorAvatarUrl!.isNotEmpty
+                        ? NetworkImage(widget.post.authorAvatarUrl!) : null,
+                    child: widget.post.authorAvatarUrl == null || widget.post.authorAvatarUrl!.isEmpty
+                        ? Text(_initials(widget.post.authorName), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))
+                        : null,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        widget.post.authorName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14.5,
-                          color: Color(0xFF111827),
-                        ),
-                      ),
-                      Text(
-                        widget.formatTime(widget.post.createdAt),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF9CA3AF),
-                        ),
-                      ),
+                      Text(widget.post.authorName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, color: Color(0xFF111827))),
+                      Row(children: [
+                        Text(widget.formatTime(widget.post.createdAt), style: const TextStyle(fontSize: 11.5, color: Color(0xFF9CA3AF))),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.public, size: 11, color: Color(0xFF9CA3AF)),
+                      ]),
                     ],
                   ),
                 ),
-                const Icon(Icons.more_horiz, color: Color(0xFFD1D5DB)),
+                IconButton(
+                  icon: const Icon(Icons.more_horiz, color: Color(0xFF9CA3AF)),
+                  onPressed: () {},
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
               ],
             ),
           ),
-          // Content
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Text(
-              widget.post.content,
-              style: const TextStyle(
-                color: Color(0xFF374151),
-                fontSize: 14.5,
-                height: 1.55,
+
+          // ── Text Content ──────────────────────────────────────────
+          if (hasText)
+            Padding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, hasMedia ? 8 : 0),
+              child: Text(
+                widget.post.content,
+                style: const TextStyle(color: Color(0xFF1F2937), fontSize: 15, height: 1.5),
+                maxLines: hasMedia ? 3 : null,
+                overflow: hasMedia ? TextOverflow.ellipsis : TextOverflow.visible,
               ),
             ),
+
+          // ── Media Section (Facebook-style) ─────────────────────
+          if (hasMedia) _MediaSection(post: widget.post),
+
+          // ── Counts row (Facebook-style mini counts) ────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+            child: Row(
+              children: [
+                if (_likeCount > 0) ...[
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(color: Color(0xFF6366F1), shape: BoxShape.circle),
+                    child: const Icon(Icons.thumb_up, size: 9, color: Colors.white),
+                  ),
+                  const SizedBox(width: 4),
+                  Text('$_likeCount', style: const TextStyle(fontSize: 12.5, color: Color(0xFF6B7280))),
+                ],
+                const Spacer(),
+                if (_commentCount > 0)
+                  Text('$_commentCount comment${_commentCount == 1 ? '' : 's'}', style: const TextStyle(fontSize: 12.5, color: Color(0xFF6B7280))),
+                if (_commentCount > 0 && _shareCount > 0)
+                  const Text('  ·  ', style: TextStyle(fontSize: 12.5, color: Color(0xFF6B7280))),
+                if (_shareCount > 0)
+                  Text('$_shareCount share${_shareCount == 1 ? '' : 's'}', style: const TextStyle(fontSize: 12.5, color: Color(0xFF6B7280))),
+              ],
+            ),
           ),
-          // Image
-          if (widget.post.mediaUrl != null &&
-              widget.post.mediaUrl!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(bottom: Radius.zero),
-              child: Image.network(
-                widget.post.mediaUrl!,
-                width: double.infinity,
-                height: 200,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stack) => Container(
-                  height: 120,
-                  color: const Color(0xFFF3F4F6),
-                  child: const Center(
-                    child: Icon(
-                      Icons.image_outlined,
-                      color: Color(0xFFD1D5DB),
-                      size: 40,
+
+          // ── Divider ────────────────────────────────────────────────
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Divider(height: 1, color: Color(0xFFF3F4F6)),
+          ),
+
+          // ── Action Buttons (Facebook-style full-width row) ──────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Row(
+              children: [
+                // Like
+                Expanded(
+                  child: ScaleTransition(
+                    scale: _scaleAnim,
+                    child: TextButton.icon(
+                      onPressed: _likePending ? null : _handleLike,
+                      icon: Icon(
+                        _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                        size: 18,
+                        color: _isLiked ? const Color(0xFF6366F1) : const Color(0xFF6B7280),
+                      ),
+                      label: Text(
+                        'Like',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _isLiked ? const Color(0xFF6366F1) : const Color(0xFF6B7280),
+                        ),
+                      ),
+                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 6)),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ],
-          // Action Row
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 10, 12, 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    // ── Like button with animation + pending guard ──
-                    _LikeButton(
-                      isLiked: _isLiked,
-                      count: _likeCount,
-                      isPending: _isPending,
-                      scaleAnim: _scaleAnim,
-                      onTap: _handleLike,
-                    ),
-                    const SizedBox(width: 4),
-                    _ActionBtn(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: '${widget.post.commentsCount}',
-                      color: const Color(0xFF9CA3AF),
-                      onTap: widget.onComment,
-                    ),
-                  ],
+                // Comment
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      await widget.onComment();
+                      // count is updated via _onCommentAdded from comment sheet callback
+                    },
+                    icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Color(0xFF6B7280)),
+                    label: const Text('Comment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 6)),
+                  ),
                 ),
-                _ActionBtn(
-                  icon: Icons.ios_share_outlined,
-                  label: 'Share',
-                  color: const Color(0xFF9CA3AF),
-                  onTap: widget.onShare,
+                // Save
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: _savePending ? null : _handleSave,
+                    icon: Icon(
+                      _isSaved ? Icons.bookmark : Icons.bookmark_border,
+                      size: 18,
+                      color: _isSaved ? const Color(0xFF10B981) : const Color(0xFF6B7280),
+                    ),
+                    label: Text(
+                      _isSaved ? 'Saved' : 'Save',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _isSaved ? const Color(0xFF10B981) : const Color(0xFF6B7280),
+                      ),
+                    ),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 6)),
+                  ),
+                ),
+                // Share
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () { widget.onShare(); _onShared(); },
+                    icon: const Icon(Icons.reply_rounded, size: 18, color: Color(0xFF6B7280)),
+                    label: const Text('Share', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 6)),
+                  ),
                 ),
               ],
             ),
@@ -849,6 +930,7 @@ class _PostCardState extends State<_PostCard>
       ),
     );
   }
+
 
   // ── Safe initial letter for avatar ──────────────────────────────
   String _initials(dynamic name) {
@@ -871,117 +953,7 @@ class _PostCardState extends State<_PostCard>
   }
 }
 
-// ── Action Button ─────────────────────────────────────────────────────────────
-class _ActionBtn extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
 
-  const _ActionBtn({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Row(
-          children: [
-            Icon(icon, size: 19, color: color),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Like Button — animated, pending-aware ─────────────────────────────────
-// Uses ScaleTransition for spring effect; dims during pending API call.
-class _LikeButton extends StatelessWidget {
-  final bool isLiked;
-  final int count;
-  final bool isPending;
-  final Animation<double> scaleAnim;
-  final VoidCallback onTap;
-
-  const _LikeButton({
-    required this.isLiked,
-    required this.count,
-    required this.isPending,
-    required this.scaleAnim,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final activeColor = const Color(0xFFEF4444); // red when liked
-    final inactiveColor = const Color(0xFF9CA3AF); // grey when not liked
-    final color = isLiked ? activeColor : inactiveColor;
-
-    return GestureDetector(
-      onTap: isPending ? null : onTap, // block tap while pending
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Row(
-          children: [
-            ScaleTransition(
-              scale: scaleAnim,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                transitionBuilder: (child, anim) =>
-                    ScaleTransition(scale: anim, child: child),
-                child: isPending
-                    ? SizedBox(
-                        key: const ValueKey('loader'),
-                        width: 19,
-                        height: 19,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: color.withValues(alpha: 0.5),
-                        ),
-                      )
-                    : Icon(
-                        isLiked
-                            ? Icons.thumb_up_alt_rounded
-                            : Icons.thumb_up_alt_outlined,
-                        key: ValueKey(isLiked),
-                        size: 19,
-                        color: color,
-                      ),
-              ),
-            ),
-            const SizedBox(width: 5),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: TextStyle(
-                color: color,
-                fontSize: 13,
-                fontWeight: isLiked ? FontWeight.w700 : FontWeight.w500,
-              ),
-              child: Text('$count'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ── Comments Bottom Sheet ─────────────────────────────────────────────────────
 class _CommentsSheet extends StatefulWidget {
@@ -1424,6 +1396,178 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+
+
+
+
+
+// ── Facebook-style Media Section ─────────────────────────────────────────────
+class _MediaSection extends StatelessWidget {
+  final FeedPost post;
+  const _MediaSection({required this.post});
+
+  @override
+  Widget build(BuildContext context) {
+    final allMedia = <String>[];
+
+    // Collect all media URLs
+    if (post.mediaUrls.isNotEmpty) {
+      for (final m in post.mediaUrls) {
+        if (m.url.isNotEmpty) allMedia.add(m.url);
+      }
+    }
+    if (allMedia.isEmpty && post.effectiveMediaUrl != null) {
+      allMedia.add(post.effectiveMediaUrl!);
+    }
+
+    if (allMedia.isEmpty) return const SizedBox.shrink();
+
+    // === 1 image → full width ===
+    if (allMedia.length == 1) {
+      return _MediaTile(
+        url: allMedia[0],
+        isVideo: post.isVideo,
+        height: 280,
+        width: double.infinity,
+      );
+    }
+
+    // === 2 images → side by side ===
+    if (allMedia.length == 2) {
+      return Row(
+        children: [
+          Expanded(child: _MediaTile(url: allMedia[0], height: 200)),
+          const SizedBox(width: 2),
+          Expanded(child: _MediaTile(url: allMedia[1], height: 200)),
+        ],
+      );
+    }
+
+    // === 3 images → 1 left big + 2 right stacked ===
+    if (allMedia.length == 3) {
+      return Row(
+        children: [
+          Expanded(flex: 2, child: _MediaTile(url: allMedia[0], height: 200)),
+          const SizedBox(width: 2),
+          Expanded(
+            flex: 1,
+            child: Column(
+              children: [
+                _MediaTile(url: allMedia[1], height: 99),
+                const SizedBox(height: 2),
+                _MediaTile(url: allMedia[2], height: 99),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    // === 4+ images → 2x2 grid with "+N more" overlay on last cell ===
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: _MediaTile(url: allMedia[0], height: 150)),
+            const SizedBox(width: 2),
+            Expanded(child: _MediaTile(url: allMedia[1], height: 150)),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Row(
+          children: [
+            Expanded(child: _MediaTile(url: allMedia[2], height: 150)),
+            const SizedBox(width: 2),
+            Expanded(
+              child: Stack(
+                children: [
+                  _MediaTile(url: allMedia[3], height: 150),
+                  if (allMedia.length > 4)
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.black54,
+                        child: Center(
+                          child: Text(
+                            '+${allMedia.length - 4}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Single media tile — image with loading, error, video overlay
+class _MediaTile extends StatelessWidget {
+  final String url;
+  final double height;
+  final double width;
+  final bool isVideo;
+
+  const _MediaTile({
+    required this.url,
+    required this.height,
+    this.width = double.infinity,
+    this.isVideo = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      width: width,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(
+            url,
+            fit: BoxFit.cover,
+            loadingBuilder: (_, child, progress) {
+              if (progress == null) return child;
+              return Container(
+                color: const Color(0xFFF3F4F6),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    value: progress.expectedTotalBytes != null
+                        ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                        : null,
+                    strokeWidth: 2,
+                    color: const Color(0xFF6366F1),
+                  ),
+                ),
+              );
+            },
+            errorBuilder: (_, __, ___) => Container(
+              color: const Color(0xFFF3F4F6),
+              child: const Center(
+                child: Icon(Icons.broken_image_outlined, color: Color(0xFFD1D5DB), size: 40),
+              ),
+            ),
+          ),
+          if (isVideo)
+            Container(
+              color: Colors.black26,
+              child: const Center(
+                child: Icon(Icons.play_circle_fill, color: Colors.white, size: 52),
+              ),
+            ),
+        ],
       ),
     );
   }

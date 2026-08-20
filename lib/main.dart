@@ -9,7 +9,22 @@ import 'services/notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp();
+    if (kIsWeb) {
+      // WEB ke liye yahan options dena zaroori hai!
+      // Firebase console se apni API keys yahan paste karein:
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: "AIzaSyDFYJjIzQo_G82TBa6PPdSAwdwvoT-esRU",
+          appId: "1:362429067451:android:3501ae54175485aa6ff99e", // Web App ID Firebase Console se lana hoga
+          messagingSenderId: "362429067451",
+          projectId: "smartgali",
+          storageBucket: "smartgali.firebasestorage.app",
+        ),
+      );
+    } else {
+      // Android/iOS ke liye default (google-services.json se lega)
+      await Firebase.initializeApp();
+    }
     await NotificationService().initialize();
   } catch (e) {
     debugPrint('Firebase initialization failed: $e');

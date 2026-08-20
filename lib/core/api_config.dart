@@ -48,8 +48,8 @@ class ApiConfig {
     } else if (_isEmulator) {
       selected = _emulatorUrl;
     } else {
-      // Physical device default
-      selected = 'https://api.smartgali.com/api/v1';
+      // Physical device default (Local IP for testing)
+      selected = _productionUrl; // Use local IP instead of 'https://api.smartgali.com/api/v1'
     }
     return selected.replaceFirst(RegExp(r'/+$'), '');
   }
@@ -69,7 +69,9 @@ class ApiConfig {
       return apiUri.replace(path: path, query: null, fragment: null).toString();
     }
 
-    if (kReleaseMode && parsed.scheme != 'https') return null;
+    if (kReleaseMode && parsed.scheme == 'http') {
+      return parsed.replace(scheme: 'https').toString();
+    }
 
     // Rewrite localhost URLs to baseUrl because physical phones cannot access localhost.
     // This happens if the backend misconfigures its BASE_URL env var.
@@ -122,6 +124,15 @@ class ApiConfig {
       "$baseUrl/notification/me/read-all";
   static String markNotificationRead(int id) =>
       "$baseUrl/notification/$id/read";
+
+  // ── Follow module endpoints (Phase 8) ────────────────────────
+  /// POST body: { userId: TARGET_USER_ID }
+  static String get followUser => "$baseUrl/users/follow";
+  static String unfollow(int targetUserId) =>
+      "$baseUrl/users/unfollow/$targetUserId";
+  static String get myFollowers => "$baseUrl/users/followers";
+  static String get myFollowing => "$baseUrl/users/following";
+  static String get allUsers => "$baseUrl/user";
 
   // ── Device module endpoints ─────────────────────────────────
   static String get registerDevice => "$baseUrl/device/register";

@@ -33,30 +33,46 @@ class _MainDashboardState extends State<MainDashboard> {
       body: IndexedStack(index: _selectedIndex, children: _pages),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Color(0xFFE5E7EB), width: 1.0)),
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 10,
+              offset: Offset(0, -2),
+            ),
+          ],
         ),
         child: BottomNavigationBar(
           backgroundColor: Colors.white,
           elevation: 0,
+          showSelectedLabels: false,
+          showUnselectedLabels: false,
           type: BottomNavigationBarType.fixed,
           currentIndex: _selectedIndex,
-          selectedItemColor: const Color(0xFFFF6B00),
-          unselectedItemColor: Colors.grey,
+          selectedItemColor: const Color(0xFF2B7BB9),
+          unselectedItemColor: const Color(0xFFBAC5D0),
           onTap: _onItemTapped,
           items: const [
             BottomNavigationBarItem(
-              icon: Icon(Icons.home_filled),
-              label: 'Home',
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: '',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.explore),
-              label: 'Services',
+              icon: Icon(Icons.explore_outlined),
+              activeIcon: Icon(Icons.explore),
+              label: '',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.chat_bubble),
-              label: 'Chats',
+              icon: Icon(Icons.chat_bubble_outline),
+              activeIcon: Icon(Icons.chat_bubble),
+              label: '',
             ),
-            BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: '',
+            ),
           ],
         ),
       ),

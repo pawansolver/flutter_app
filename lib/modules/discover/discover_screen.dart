@@ -1,24 +1,22 @@
 import 'package:flutter/material.dart';
 import '../../widgets/custom_drawer.dart';
+import '../profile/follow_service.dart';
+import '../profile/user_profile_screen.dart';
 
 class DiscoverScreen extends StatefulWidget {
-  const DiscoverScreen({Key? key}) : super(key: key);
+  const DiscoverScreen({super.key});
 
   @override
   State<DiscoverScreen> createState() => _DiscoverScreenState();
 }
 
 class _DiscoverScreenState extends State<DiscoverScreen> {
+  final _followService = FollowService();
+  bool _loading = true;
+  String? _error;
+  List<FollowUserModel> _users = [];
   String _activeRadius = 'Within 500m';
   final List<String> _radiusOptions = ['Within 500m', '1 km', '2 km', '5 km'];
-
-  final List<Map<String, dynamic>> _nearbyPeople = [
-    {'name': 'Amit', 'distance': '100m away', 'color': Colors.blue},
-    {'name': 'Rahul', 'distance': '250m away', 'color': Colors.green},
-    {'name': 'Pooja', 'distance': '400m away', 'color': Colors.purple},
-    {'name': 'Vikas', 'distance': '450m away', 'color': Colors.orange},
-    {'name': 'Neha', 'distance': '500m away', 'color': Colors.teal},
-  ];
 
   final List<Map<String, dynamic>> _trendingItems = [
     {
@@ -40,6 +38,29 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       'tag': 'Urgent Alert',
     },
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final result = await _followService.getSuggestedUsers();
+    if (!mounted) return;
+    setState(() {
+      if (result.isSuccess) {
+        _users = result.data ?? [];
+      } else {
+        _error = result.error ?? 'Unknown error occurred.';
+      }
+      _loading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +170,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 24, 16, 12),
               child: Text(
-                'Nearby People',
+                'People on SmartGali',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -157,50 +178,84 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 ),
               ),
             ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: _nearbyPeople.map((person) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 30,
-                          backgroundColor: person['color'].withOpacity(0.2),
-                          child: Text(
-                            person['name'][0],
-                            style: TextStyle(
-                              color: person['color'],
-                              fontWeight: FontWeight.bold,
-                              fontSize: 24,
+            
+            if (_loading)
+              const Center(child: CircularProgressIndicator())
+            else if (_error != null)
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+              )
+            else if (_users.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text('No users found in your area yet.'),
+              )
+            else
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: _users.map((person) {
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(
+                              userId: person.userId,
+                              userName: person.userName,
+                              fullName: person.fullName,
+                              avatarUrl: person.avatarUrl,
                             ),
                           ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Column(
+                          children: [
+                            CircleAvatar(
+                              radius: 32,
+                              backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.2),
+                              backgroundImage: person.avatarUrl != null && person.avatarUrl!.isNotEmpty
+                                  ? NetworkImage(person.avatarUrl!)
+                                  : null,
+                              child: person.avatarUrl == null || person.avatarUrl!.isEmpty
+                                  ? Text(
+                                      person.displayName.isNotEmpty ? person.displayName[0].toUpperCase() : '?',
+                                      style: const TextStyle(
+                                        color: Color(0xFF10B981),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 24,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              person.displayName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF111827),
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '@${person.userName}',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          person['name'],
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF111827),
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          person['distance'],
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
+                      ),
+                    );
+                  }).toList(),
+                ),
               ),
-            ),
             
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 32, 16, 16),
@@ -237,7 +292,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withOpacity(0.1),
+                              color: const Color(0xFF10B981).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(

@@ -1157,7 +1157,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F4F1),
+      backgroundColor: Colors.white,
       appBar: _buildAppBar(),
       body: Column(
         children: [
@@ -1195,14 +1195,14 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
       backgroundColor: Colors.white,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
+        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
         onPressed: () => Navigator.pop(context),
       ),
       title: Row(
         children: [
           CircleAvatar(
             radius: 19,
-            backgroundColor: const Color(0xFFFF6B00),
+            backgroundColor: Colors.black,
             backgroundImage: widget.avatarUrl == null
                 ? null
                 : NetworkImage(widget.avatarUrl!),
@@ -1228,7 +1228,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFF111827),
+                    color: Colors.black,
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1241,7 +1241,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                       : 'Offline',
                   style: TextStyle(
                     color: _remoteIsTyping
-                        ? const Color(0xFFFF6B00)
+                        ? Colors.black
                         : Colors.grey,
                     fontSize: 12,
                     fontStyle: _remoteIsTyping
@@ -1257,21 +1257,17 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
       actions: [
         IconButton(
           tooltip: 'Call with SIM',
-          icon: const Icon(Icons.call_outlined, color: Color(0xFF111827)),
+          icon: const Icon(Icons.call_outlined, color: Colors.black),
           onPressed: _callRecipient,
         ),
       ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(color: const Color(0xFFE5E7EB), height: 1),
-      ),
     );
   }
 
   Widget _buildMessageList() {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
+        child: CircularProgressIndicator(color: Colors.black),
       );
     }
     if (_error != null) {
@@ -1332,9 +1328,9 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
     final mine = message.senderId == widget.currentUserId;
     final key = message.idempotencyKey;
     final delivery = key == null ? null : _pending[key];
-    final foreground = mine ? Colors.white : const Color(0xFF111827);
+    final foreground = mine ? Colors.white : Colors.black;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Align(
         alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
         child: GestureDetector(
@@ -1344,24 +1340,20 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
             constraints: BoxConstraints(
               maxWidth: MediaQuery.sizeOf(context).width * 0.78,
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: mine ? const Color(0xFF111827) : Colors.white,
-              border: mine ? null : Border.all(color: const Color(0xFFE5E7EB)),
-              borderRadius: BorderRadius.circular(18).copyWith(
-                bottomRight: mine ? Radius.zero : null,
-                bottomLeft: mine ? null : Radius.zero,
-              ),
+              color: mine ? Colors.black : Colors.white,
+              borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 4,
+                  color: Colors.black.withOpacity(mine ? 0.1 : 0.06),
+                  blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (message.isForwarded)
                   Align(
@@ -1371,7 +1363,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                       child: Text(
                         '↪ Forwarded',
                         style: TextStyle(
-                          color: foreground.withValues(alpha: .65),
+                          color: foreground.withOpacity(.65),
                           fontSize: 11,
                           fontStyle: FontStyle.italic,
                         ),
@@ -1385,16 +1377,14 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                     message.messageType != 'text')
                   const SizedBox(height: 6),
                 if ((message.message ?? '').isNotEmpty)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      message.message!,
-                      style: TextStyle(color: foreground, fontSize: 15),
-                    ),
+                  Text(
+                    message.message!,
+                    style: TextStyle(color: foreground, fontSize: 14, height: 1.3),
                   ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Row(
                   mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     if (delivery?.state == _DeliveryState.uploading) ...[
                       SizedBox(
@@ -1403,7 +1393,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                           value: delivery!.progress == 0
                               ? null
                               : delivery.progress,
-                          color: const Color(0xFFFF6B00),
+                          color: Colors.black,
                         ),
                       ),
                       IconButton(
@@ -1432,14 +1422,14 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                       Icon(
                         Icons.schedule,
                         size: 13,
-                        color: foreground.withValues(alpha: .6),
+                        color: foreground.withOpacity(.6),
                       ),
                     ],
                     if (message.isPinned) ...[
                       Icon(
                         Icons.push_pin,
                         size: 12,
-                        color: foreground.withValues(alpha: .7),
+                        color: foreground.withOpacity(.7),
                       ),
                       const SizedBox(width: 3),
                     ],
@@ -1447,7 +1437,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                       Text(
                         ' edited',
                         style: TextStyle(
-                          color: foreground.withValues(alpha: .6),
+                          color: foreground.withOpacity(.6),
                           fontSize: 10,
                         ),
                       ),
@@ -1455,7 +1445,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                     Text(
                       message.formattedTime,
                       style: TextStyle(
-                        color: foreground.withValues(alpha: .6),
+                        color: foreground.withOpacity(.6),
                         fontSize: 10,
                       ),
                     ),
@@ -1485,10 +1475,10 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
       margin: const EdgeInsets.only(bottom: 7),
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
       decoration: BoxDecoration(
-        color: mine ? Colors.white12 : const Color(0xFFF3F4F6),
+        color: mine ? Colors.white10 : const Color(0xFFF3F4F6),
         borderRadius: BorderRadius.circular(9),
         border: const Border(
-          left: BorderSide(color: Color(0xFFFF6B00), width: 3),
+          left: BorderSide(color: Colors.black, width: 3),
         ),
       ),
       child: Text(
@@ -1626,7 +1616,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                             : playing
                             ? Icons.pause_circle
                             : Icons.play_circle,
-                        color: mine ? Colors.white : const Color(0xFFFF6B00),
+                        color: mine ? Colors.white : Colors.black,
                       ),
               ),
               Expanded(
@@ -1677,7 +1667,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
           Icon(
             icon,
             size: 42,
-            color: mine ? Colors.white : const Color(0xFFFF6B00),
+            color: mine ? Colors.white : Colors.black,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1735,10 +1725,9 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
 
   Widget _buildInputArea() {
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
       ),
       child: SafeArea(
         child: Column(
@@ -1764,7 +1753,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
         color: const Color(0xFFF3F4F6),
         borderRadius: BorderRadius.circular(10),
         border: const Border(
-          left: BorderSide(color: Color(0xFFFF6B00), width: 3),
+          left: BorderSide(color: Colors.black, width: 3),
         ),
       ),
       child: Row(
@@ -1772,7 +1761,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
           Icon(
             editing == null ? Icons.reply : Icons.edit,
             size: 18,
-            color: const Color(0xFFFF6B00),
+            color: Colors.black,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -1782,7 +1771,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                 Text(
                   editing == null ? 'Replying' : 'Editing message',
                   style: const TextStyle(
-                    color: Color(0xFFFF6B00),
+                    color: Colors.black,
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
@@ -1815,89 +1804,79 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
 
   Widget _buildStandardInput() {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         IconButton(
           tooltip: 'Take photo',
-          icon: const Icon(Icons.camera_alt_outlined, color: Colors.grey),
+          icon: const Icon(Icons.camera_alt_outlined, color: Colors.black, size: 26),
           onPressed: _pickFromCamera,
         ),
         IconButton(
           tooltip: 'Choose photo or video',
-          icon: const Icon(Icons.image_outlined, color: Colors.grey),
+          icon: const Icon(Icons.image_outlined, color: Colors.black, size: 26),
           onPressed: _pickFromGallery,
         ),
-        GestureDetector(
-          onTap: _startRecording,
-          onLongPressStart: (_) => _startRecording(),
-          onLongPressEnd: (_) => _finishRecording(),
-          child: const Padding(
-            padding: EdgeInsets.all(10),
-            child: Icon(Icons.mic_none_outlined, color: Colors.grey),
+        IconButton(
+          tooltip: 'Choose emoji',
+          icon: Icon(
+            _showEmojiPicker
+                ? Icons.keyboard_outlined
+                : Icons.sentiment_satisfied_alt_outlined,
+            color: Colors.black,
+            size: 26,
           ),
+          onPressed: () {
+            setState(() => _showEmojiPicker = !_showEmojiPicker);
+            if (_showEmojiPicker) {
+              _focusNode.unfocus();
+            } else {
+              _focusNode.requestFocus();
+            }
+          },
         ),
         Expanded(
           child: Container(
             constraints: const BoxConstraints(maxHeight: 120),
             decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
+              color: Colors.black, // Black text field pill
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    focusNode: _focusNode,
-                    minLines: 1,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      hintText: 'Message',
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                  ),
+            child: TextField(
+              controller: _messageController,
+              focusNode: _focusNode,
+              minLines: 1,
+              maxLines: 4,
+              style: const TextStyle(color: Colors.white, fontSize: 15),
+              decoration: const InputDecoration(
+                hintText: 'Type your message here!',
+                hintStyle: TextStyle(color: Colors.white60, fontSize: 14),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
                 ),
-                IconButton(
-                  icon: Icon(
-                    _showEmojiPicker
-                        ? Icons.keyboard
-                        : Icons.sentiment_satisfied_alt_outlined,
-                    color: Colors.grey,
-                  ),
-                  onPressed: () {
-                    setState(() => _showEmojiPicker = !_showEmojiPicker);
-                    if (_showEmojiPicker) {
-                      _focusNode.unfocus();
-                    } else {
-                      _focusNode.requestFocus();
-                    }
-                  },
-                ),
-              ],
+              ),
             ),
           ),
         ),
-        const SizedBox(width: 6),
-        IconButton.filled(
-          style: IconButton.styleFrom(
-            backgroundColor: _isTyping
-                ? const Color(0xFFFF6B00)
-                : const Color(0xFF111827),
-          ),
-          onPressed: _sendText,
+        const SizedBox(width: 8),
+        IconButton(
           icon: Icon(
             _editingMsg != null
                 ? Icons.check_rounded
                 : _isTyping
-                ? Icons.send_rounded
-                : Icons.thumb_up_alt_outlined,
+                    ? Icons.send_rounded
+                    : Icons.mic_none_outlined,
+            color: Colors.black,
+            size: 26,
           ),
+          onPressed: () {
+            if (_editingMsg != null || _isTyping) {
+              _sendText();
+            } else {
+              _startRecording();
+            }
+          },
         ),
       ],
     );
@@ -1908,11 +1887,12 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
+        color: Colors.black,
         borderRadius: BorderRadius.circular(26),
       ),
       child: Row(
         children: [
+          const SizedBox(width: 8),
           FadeTransition(
             opacity: _pulseController,
             child: const Icon(Icons.mic, color: Colors.red),
@@ -1920,17 +1900,17 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
           const SizedBox(width: 8),
           Text(
             _formatDuration(_recordingDuration),
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
           ),
           const Spacer(),
           TextButton(
             onPressed: _cancelRecording,
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
           ),
-          IconButton.filled(
+          IconButton(
             tooltip: 'Send voice note',
             onPressed: _finishRecording,
-            icon: const Icon(Icons.send),
+            icon: const Icon(Icons.send, color: Colors.white),
           ),
         ],
       ),
