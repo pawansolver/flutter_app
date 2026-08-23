@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dashboard/main_dashboard.dart';
 import 'society_operations_screen.dart';
 import 'announcements_screen.dart';
 import 'documents_screen.dart';
@@ -12,6 +13,18 @@ class SocietyDashboardScreen extends StatefulWidget {
 }
 
 class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
+  void _handleBack() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const MainDashboard()),
+        (route) => false,
+      );
+    }
+  }
+
   final List<Map<String, dynamic>> _quickActions = [
     {'title': 'Complaints', 'icon': Icons.report_problem_outlined, 'tab': 0, 'route': 'ops'},
     {'title': 'Announcements', 'icon': Icons.campaign_outlined, 'tab': -1, 'route': 'announcements'},
@@ -196,23 +209,29 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFE1EAE4),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'My Society Dashboard',
-          style: TextStyle(
-            color: Color(0xFF111827),
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFE1EAE4),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
+            onPressed: _handleBack,
           ),
-        ),
+          title: const Text(
+            'My Society Dashboard',
+            style: TextStyle(
+              color: Color(0xFF111827),
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
           child: Container(
@@ -413,6 +432,7 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
             const SizedBox(height: 24),
           ],
         ),
+      ),
       ),
     );
   }

@@ -1,11 +1,11 @@
 {
-    "name": "my_first_app",
-    "short_name": "my_first_app",
+    "name": "SmartGali",
+    "short_name": "SmartGali",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#ffffff",
+    "theme_color": "#ffffff",
+    "description": "SmartGali hyperlocal app",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -13,6 +13,39 @@ class NotificationResult<T> {
   const NotificationResult.failure(this.error) : data = null;
 }
 
+/// Notification category tabs used in the UI filter bar.
+enum NotificationCategory { all, unread, society, social }
+
+extension NotificationCategoryExt on NotificationCategory {
+  String get label {
+    switch (this) {
+      case NotificationCategory.all:
+        return 'All';
+      case NotificationCategory.unread:
+        return 'Unread';
+      case NotificationCategory.society:
+        return 'Society';
+      case NotificationCategory.social:
+        return 'Social';
+    }
+  }
+
+  /// Backend `type` values that belong to this tab.
+  /// Null means "no filtering" (show all).
+  List<String>? get typeFilters {
+    switch (this) {
+      case NotificationCategory.all:
+        return null;
+      case NotificationCategory.unread:
+        return null; // handled via unreadOnly query param
+      case NotificationCategory.society:
+        return ['alert', 'system', 'reminder'];
+      case NotificationCategory.social:
+        return ['message', 'comment', 'like', 'follow', 'info'];
+    }
+  }
+}
+
 /// A single notification as returned by the backend `/notification/me` feed.
 class AppNotification {
   final int id;
@@ -63,6 +96,9 @@ class AppNotification {
       createdAt: parsedDate,
     );
   }
+
+  /// Returns the deep-link target type from the notification data payload.
+  String? get deepLinkTarget => data?['target']?.toString();
 }
 
 /// Paginated feed payload for the notifications screen.
@@ -130,6 +166,8 @@ class NotificationService {
     return e.message ?? fallback;
   }
 
+  // ── READ ─────────────────────────────────────────────────────────────────
+
   Future<NotificationResult<NotificationFeed>> getMyNotifications({
     int page = 1,
     int limit = 20,
@@ -184,6 +222,8 @@ class NotificationService {
     }
   }
 
+  // ── UPDATE ───────────────────────────────────────────────────────────────
+
   Future<NotificationResult<bool>> markRead(int id) async {
     try {
       final resp = await _dio.patch(
@@ -222,6 +262,64 @@ class NotificationService {
     } on DioException catch (e) {
       return NotificationResult.failure(
         _extractError(e, 'Failed to update notifications'),
+      );
+    } catch (_) {
+      return const NotificationResult.failure('Something went wrong');
+    }
+  }
+
+  // ── DELETE ───────────────────────────────────────────────────────────────
+
+  /// Soft-delete a single notification (swipe-to-dismiss / long-press delete).
+  Future<NotificationResult<bool>> deleteNotification(int id) async {
+    try {
+      final resp = await _dio.delete(
+        ApiConfig.deleteNotification(id),
+        options: await _authOptions(),
+      );
+      if (resp.statusCode == 200 && resp.data['success'] == true) {
+        return const NotificationResult.success(true);
+      }
+      return NotificationResult.failure(
+        resp.data['message']?.toString() ?? 'Failed to delete notification',
+      );
+    } on DioException catch (e) {
+      return NotificationResult.failure(
+        _extractError(e, 'Failed to delete notification'),
+      );
+    } catch (_) {
+      return const NotificationResult.failure('Something went wrong');
+    }
+  }
+
+  /// Bulk soft-delete — used for "Clear all read" action.
+  Future<NotificationResult<int>> bulkDeleteNotifications(
+    List<int> ids, {
+    String? deletedRemarks,
+  }) async {
+    try {
+      final resp = await _dio.post(
+        ApiConfig.bulkDeleteNotifications,
+        data: {
+          'ids': ids,
+          if (deletedRemarks != null) 'deletedRemarks': deletedRemarks,
+        },
+        options: await _authOptions(),
+      );
+      if (resp.statusCode == 200 && resp.data['success'] == true) {
+        return NotificationResult.success(
+          int.tryParse(
+                resp.data['data']?['count']?.toString() ?? '${ids.length}',
+              ) ??
+              ids.length,
+        );
+      }
+      return NotificationResult.failure(
+        resp.data['message']?.toString() ?? 'Failed to clear notifications',
+      );
+    } on DioException catch (e) {
+      return NotificationResult.failure(
+        _extractError(e, 'Failed to clear notifications'),
       );
     } catch (_) {
       return const NotificationResult.failure('Something went wrong');

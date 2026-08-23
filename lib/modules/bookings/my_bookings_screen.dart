@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dashboard/main_dashboard.dart';
 
 // ─── App Colors ───────────────────────────────────────────────────
 class _AppColors {
@@ -454,40 +455,63 @@ class _MyBookingsScreenState extends State<MyBookingsScreen>
     final bookings =
         _selectedTab == 0 ? _activeBookings : _pastBookings;
 
-    return Scaffold(
-      backgroundColor: _AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.white,
-        centerTitle: false,
-        title: const Text(
-          'My Bookings',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: _AppColors.primaryText,
+    void handleBack() {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainDashboard()),
+          (route) => false,
+        );
+      }
+    }
+
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: _AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          surfaceTintColor: Colors.white,
+          centerTitle: false,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: _AppColors.primaryText),
+            onPressed: handleBack,
+          ),
+          title: const Text(
+            'My Bookings',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: _AppColors.primaryText,
+            ),
+          ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(height: 1, color: _AppColors.border),
           ),
         ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: _AppColors.border),
+        body: Column(
+          children: [
+            _buildTabBar(),
+            const SizedBox(height: 16),
+            Expanded(
+              child: bookings.isEmpty
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      itemCount: bookings.length,
+                      itemBuilder: (_, i) => _buildBookingCard(bookings[i]),
+                    ),
+            ),
+          ],
         ),
-      ),
-      body: Column(
-        children: [
-          _buildTabBar(),
-          const SizedBox(height: 16),
-          Expanded(
-            child: bookings.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    itemCount: bookings.length,
-                    itemBuilder: (_, i) => _buildBookingCard(bookings[i]),
-                  ),
-          ),
-        ],
       ),
     );
   }

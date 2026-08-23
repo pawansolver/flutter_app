@@ -2,11 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'dart:io' show Platform;
 
 class ApiConfig {
-  /// LOCAL TESTING MODE — real phone bhi local server se connect hoga
-  /// Phone aur computer same WiFi pe hone chahiye!
-  /// 'https://api.smartgali.com/api/v1'
-  static const String _productionUrl = 'http://192.168.31.15:5000/api/v1';
-  // 'https://api.smartgali.com/api/v1'
+  /// Live Production API URL
+  static const String _productionUrl = 'https://api.smartgali.com/api/v1';
 
   static const String _configuredUrl = String.fromEnvironment(
     'API_BASE_URL',
@@ -48,8 +45,8 @@ class ApiConfig {
     } else if (_isEmulator) {
       selected = _emulatorUrl;
     } else {
-      // Physical device default (Local IP for testing)
-      selected = _productionUrl; // Use local IP instead of 'https://api.smartgali.com/api/v1'
+      // Live Production API Server
+      selected = _productionUrl;
     }
     return selected.replaceFirst(RegExp(r'/+$'), '');
   }
@@ -124,6 +121,9 @@ class ApiConfig {
       "$baseUrl/notification/me/read-all";
   static String markNotificationRead(int id) =>
       "$baseUrl/notification/$id/read";
+  static String deleteNotification(int id) => "$baseUrl/notification/$id";
+  static String get bulkDeleteNotifications =>
+      "$baseUrl/notification/bulk-delete";
 
   // ── Follow module endpoints (Phase 8) ────────────────────────
   /// POST body: { userId: TARGET_USER_ID }

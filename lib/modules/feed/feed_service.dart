@@ -1,4 +1,4 @@
-﻿import 'package:dio/dio.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/api_config.dart';
@@ -202,6 +202,43 @@ class FeedService {
     }
   }
 
+  // 8b. DELETE Unsave Post
+  Future<FeedResult<bool>> unsavePost(int postId) async {
+    try {
+      final resp = await _dio.delete(
+        '$_base/saved-post/$postId',
+        data: {'post_id': postId},
+        options: await _authOptions(),
+      );
+      if (resp.statusCode == 200 && resp.data['success'] == true) {
+        return const FeedResult.success(true);
+      }
+      return FeedResult.failure(resp.data['message'] ?? 'Failed to remove from saved');
+    } on DioException catch (e) {
+      try {
+        final resp2 = await _dio.delete(
+          '$_base/saved-post',
+          data: {'post_id': postId},
+          options: await _authOptions(),
+        );
+        if (resp2.statusCode == 200 && resp2.data['success'] == true) {
+          return const FeedResult.success(true);
+        }
+      } catch (_) {}
+      final msg = e.response?.data?['message'] ?? 'Network error';
+      return FeedResult.failure(msg);
+    }
+  }
+
+  // 8c. Toggle Save Post
+  Future<FeedResult<bool>> toggleSavePost(int postId, {required bool isCurrentlySaved}) async {
+    if (isCurrentlySaved) {
+      return unsavePost(postId);
+    } else {
+      return savePost(postId);
+    }
+  }
+
   // 9. POST Share to Feed
   Future<FeedResult<bool>> shareToFeed(int postId) async {
     try {
@@ -291,6 +328,161 @@ class FeedService {
         return const FeedResult.success(true);
       }
       return FeedResult.failure(resp.data['message'] ?? 'Failed to unfollow');
+    } on DioException catch (e) {
+      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+    }
+  }
+
+  // 14. PUT Edit Post
+  Future<FeedResult<Map<String, dynamic>>> editPost(int postId, {required String content, String? visibility}) async {
+    try {
+      final resp = await _dio.put(
+        '$_base/post/$postId',
+        data: {
+          'content': content,
+          if (visibility != null) 'visibility': visibility,
+        },
+        options: await _authOptions(),
+      );
+      if (resp.statusCode == 200 && resp.data['success'] == true) {
+        return FeedResult.success(resp.data['data'] as Map<String, dynamic>? ?? {});
+      }
+      return FeedResult.failure(resp.data['message'] ?? 'Failed to update post');
+    } on DioException catch (e) {
+      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+    }
+  }
+
+  // 15. PATCH Update Post Visibility
+  Future<FeedResult<bool>> updateVisibility(int postId, String visibility) async {
+    try {
+      final resp = await _dio.patch(
+        '$_base/post/$postId/visibility',
+        data: {'visibility': visibility},
+        options: await _authOptions(),
+      );
+      if (resp.statusCode == 200 && resp.data['success'] == true) {
+        return const FeedResult.success(true);
+      }
+      return FeedResult.failure(resp.data['message'] ?? 'Failed to update audience');
+    } on DioException catch (e) {
+      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+    }
+  }
+
+  // 16. POST Pin Post
+  Future<FeedResult<bool>> togglePinPost(int postId) async {
+    try {
+      final resp = await _dio.post(
+        '$_base/post/$postId/pin',
+        options: await _authOptions(),
+      );
+      if (resp.statusCode == 200 && resp.data['success'] == true) {
+        return const FeedResult.success(true);
+      }
+      return FeedResult.failure(resp.data['message'] ?? 'Failed to toggle pin');
+    } on DioException catch (e) {
+      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+    }
+  }
+
+  // 17. POST Toggle Comments
+  Future<FeedResult<bool>> toggleComments(int postId) async {
+    try {
+      final resp = await _dio.post(
+        '$_base/post/$postId/toggle-comments',
+        options: await _authOptions(),
+      );
+      if (resp.statusCode == 200 && resp.data['success'] == true) {
+        return const FeedResult.success(true);
+      }
+      return FeedResult.failure(resp.data['message'] ?? 'Failed to toggle comments');
+    } on DioException catch (e) {
+      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+    }
+  }
+
+  // 18. PUT / POST Block User
+  Future<FeedResult<bool>> blockUser(int targetUserId) async {
+    try {
+      final resp = await _dio.put(
+        '$_base/user/$targetUserId/block',
+        options: await _authOptions(),
+      );
+      if ((resp.statusCode == 200 || resp.statusCode == 201) && resp.data['success'] == true) {
+        return const FeedResult.success(true);
+      }
+      return FeedResult.failure(resp.data['message'] ?? 'Failed to block user');
+    } on DioException catch (e) {
+      try {
+        final resp2 = await _dio.post(
+          '$_base/users/block',
+          data: {'targetUserId': targetUserId, 'userId': targetUserId},
+          options: await _authOptions(),
+        );
+        if ((resp2.statusCode == 200 || resp2.statusCode == 201) && resp2.data['success'] == true) {
+          return const FeedResult.success(true);
+        }
+      } catch (_) {}
+      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+    }
+  }
+
+  // 19. PUT / POST Mute User
+  Future<FeedResult<bool>> muteUser(int targetUserId) async {
+    try {
+      final resp = await _dio.put(
+        '$_base/user/$targetUserId/mute',
+        options: await _authOptions(),
+      );
+      if ((resp.statusCode == 200 || resp.statusCode == 201) && resp.data['success'] == true) {
+        return const FeedResult.success(true);
+      }
+      return FeedResult.failure(resp.data['message'] ?? 'Failed to mute user');
+    } on DioException catch (e) {
+      try {
+        final resp2 = await _dio.post(
+          '$_base/users/mute',
+          data: {'targetUserId': targetUserId, 'userId': targetUserId},
+          options: await _authOptions(),
+        );
+        if ((resp2.statusCode == 200 || resp2.statusCode == 201) && resp2.data['success'] == true) {
+          return const FeedResult.success(true);
+        }
+      } catch (_) {}
+      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+    }
+  }
+
+  // 20. GET Post Insights (Live DB Metrics)
+  Future<FeedResult<Map<String, dynamic>>> getPostInsights(int postId) async {
+    try {
+      final resp = await _dio.get(
+        '$_base/post/$postId/insights',
+        options: await _authOptions(),
+      );
+      if (resp.statusCode == 200 && resp.data['success'] == true) {
+        return FeedResult.success(resp.data['data'] as Map<String, dynamic>? ?? {});
+      }
+      return FeedResult.failure(resp.data['message'] ?? 'Failed to load insights');
+    } on DioException catch (e) {
+      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+    }
+  }
+
+  // 21. POST Record Batch Views (Enterprise Viewport Dwell-Time Ingestion)
+  Future<FeedResult<bool>> recordBatchViews(List<Map<String, dynamic>> views) async {
+    if (views.isEmpty) return const FeedResult.success(true);
+    try {
+      final resp = await _dio.post(
+        '$_base/post/batch-views',
+        data: {'views': views},
+        options: await _authOptions(),
+      );
+      if (resp.statusCode == 200 && resp.data['success'] == true) {
+        return const FeedResult.success(true);
+      }
+      return FeedResult.failure(resp.data['message'] ?? 'Failed to record batch views');
     } on DioException catch (e) {
       return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
     }

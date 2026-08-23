@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dashboard/main_dashboard.dart';
 
 // ─── Colors ────────────────────────────────────────────────────────
 class _C {
@@ -220,30 +221,53 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _C.bg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.white,
-        centerTitle: false,
-        title: const Text(
-          'Official Announcements',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: _C.text,
+    void handleBack() {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainDashboard()),
+          (route) => false,
+        );
+      }
+    }
+
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: _C.bg,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          surfaceTintColor: Colors.white,
+          centerTitle: false,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: _C.text),
+            onPressed: handleBack,
+          ),
+          title: const Text(
+            'Official Announcements',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: _C.text,
+            ),
+          ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(height: 1, color: _C.border),
           ),
         ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: _C.border),
+        body: ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: dummyAnnouncements.length,
+          itemBuilder: (_, i) => _buildCard(dummyAnnouncements[i]),
         ),
-      ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: dummyAnnouncements.length,
-        itemBuilder: (_, i) => _buildCard(dummyAnnouncements[i]),
       ),
     );
   }

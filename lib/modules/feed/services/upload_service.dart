@@ -1,4 +1,4 @@
-﻿import 'package:dio/dio.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/api_config.dart';
@@ -20,7 +20,9 @@ class UploadService {
   }) async {
     try {
       final bytes = await xfile.readAsBytes();
-      final fileName = xfile.name.isNotEmpty ? xfile.name : 'upload.jpg';
+      final isVideo = xfile.mimeType?.startsWith('video/') == true;
+      final defaultName = isVideo ? 'video.mp4' : 'upload.jpg';
+      final fileName = xfile.name.isNotEmpty ? xfile.name : defaultName;
       final mimeType = xfile.mimeType ?? _guessMime(fileName);
 
       final formData = FormData.fromMap({
@@ -63,8 +65,14 @@ class UploadService {
         return 'video/mp4';
       case 'mov':
         return 'video/quicktime';
+      case 'webm':
+        return 'video/webm';
+      case 'mkv':
+        return 'video/x-matroska';
       case 'avi':
         return 'video/avi';
+      case 'm4v':
+        return 'video/x-m4v';
       default:
         return 'application/octet-stream';
     }

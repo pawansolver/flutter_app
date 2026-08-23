@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dashboard/main_dashboard.dart';
 import '../../widgets/custom_drawer.dart';
 import '../profile/follow_service.dart';
 import '../profile/user_profile_screen.dart';
@@ -64,20 +65,43 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFE1EAE4),
-      drawer: const CustomDrawer(),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: Color(0xFF111827)),
-            onPressed: () {
-              Scaffold.of(context).openDrawer();
-            },
-          ),
-        ),
+    void handleBack() {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainDashboard()),
+          (route) => false,
+        );
+      }
+    }
+
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFE1EAE4),
+        drawer: const CustomDrawer(),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: Navigator.canPop(context)
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
+                  onPressed: handleBack,
+                )
+              : Builder(
+                  builder: (context) => IconButton(
+                    icon: const Icon(Icons.menu, color: Color(0xFF111827)),
+                    onPressed: () {
+                      Scaffold.of(context).openDrawer();
+                    },
+                  ),
+                ),
 
         title: const Text(
           'Discover Nearby',
@@ -340,6 +364,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             const SizedBox(height: 32),
           ],
         ),
+      ),
       ),
     );
   }

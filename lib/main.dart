@@ -47,7 +47,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       locale: DevicePreview.locale(context),
       builder: DevicePreview.appBuilder,
-      title: 'Flutter Demo',
+      title: 'SmartGali',
       theme: ThemeData(
         // This is the theme of your application.
         //

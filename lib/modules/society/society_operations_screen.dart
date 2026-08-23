@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dashboard/main_dashboard.dart';
 
 class SocietyOperationsScreen extends StatefulWidget {
   final int initialTab;
@@ -9,8 +10,20 @@ class SocietyOperationsScreen extends StatefulWidget {
 }
 
 class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
-    with SingleTickerProviderStateMixin {
+  with SingleTickerProviderStateMixin {
   late TabController _tabController;
+
+  void _handleBack() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const MainDashboard()),
+        (route) => false,
+      );
+    }
+  }
 
   // --- Complaints Data ---
   final List<Map<String, dynamic>> _complaints = [
@@ -71,25 +84,31 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFE1EAE4),
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text(
-            'Society Operations',
-            style: TextStyle(
-              color: Color(0xFF111827),
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: DefaultTabController(
+        length: 3,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFE1EAE4),
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
+              onPressed: _handleBack,
             ),
-          ),
+            title: const Text(
+              'Society Operations',
+              style: TextStyle(
+                color: Color(0xFF111827),
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
           bottom: TabBar(
             controller: _tabController,
             labelColor: const Color(0xFFFF6B00),
@@ -112,6 +131,7 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
             _buildPollsTab(),
           ],
         ),
+      ),
       ),
     );
   }

@@ -1154,38 +1154,151 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
     );
   }
 
+  void _handleBackspace() {
+    final text = _messageController.text;
+    final selection = _messageController.selection;
+    if (text.isEmpty) {
+      // If text is empty and user taps the cross/backspace button, close the emoji picker
+      if (mounted) setState(() => _showEmojiPicker = false);
+      return;
+    }
+
+    if (selection.start > 0 && selection.start == selection.end) {
+      final newText = text.replaceRange(
+        selection.start - 1,
+        selection.start,
+        '',
+      );
+      _messageController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: selection.start - 1),
+      );
+    } else if (selection.start != selection.end && selection.start >= 0) {
+      final newText = text.replaceRange(
+        selection.start,
+        selection.end,
+        '',
+      );
+      _messageController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: selection.start),
+      );
+    } else {
+      final chars = text.characters;
+      if (chars.isNotEmpty) {
+        _messageController.text = chars.skipLast(1).string;
+        _messageController.selection = TextSelection.collapsed(
+          offset: _messageController.text.length,
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          Expanded(child: _buildMessageList()),
-          _buildInputArea(),
-          if (_showEmojiPicker)
-            SizedBox(
-              height: 250,
-              child: EmojiPicker(
-                textEditingController: _messageController,
-                config: Config(
-                  emojiViewConfig: EmojiViewConfig(
-                    backgroundColor: const Color(0xFFF9FAFB),
-                    columns: 7,
-                    emojiSizeMax:
-                        28 *
-                        (foundation.defaultTargetPlatform == TargetPlatform.iOS
-                            ? 1.3
-                            : 1),
-                  ),
-                  bottomActionBarConfig: const BottomActionBarConfig(
-                    showBackspaceButton: true,
-                    showSearchViewButton: true,
+    return PopScope(
+      canPop: !_showEmojiPicker,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_showEmojiPicker) {
+          setState(() => _showEmojiPicker = false);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: _buildAppBar(),
+        body: Column(
+          children: [
+            Expanded(child: _buildMessageList()),
+            _buildInputArea(),
+            if (_showEmojiPicker)
+              SizedBox(
+                height: 270,
+                child: EmojiPicker(
+                  textEditingController: _messageController,
+                  onBackspacePressed: _handleBackspace,
+                  config: Config(
+                    emojiViewConfig: EmojiViewConfig(
+                      backgroundColor: const Color(0xFFF9FAFB),
+                      columns: 7,
+                      emojiSizeMax:
+                          28 *
+                          (foundation.defaultTargetPlatform == TargetPlatform.iOS
+                              ? 1.3
+                              : 1),
+                    ),
+                    categoryViewConfig: const CategoryViewConfig(
+                      backgroundColor: Color(0xFFF9FAFB),
+                      indicatorColor: Color(0xFF10B981),
+                      iconColorSelected: Color(0xFF10B981),
+                      iconColor: Color(0xFF9CA3AF),
+                      dividerColor: Color(0xFFE5E7EB),
+                    ),
+                    bottomActionBarConfig: BottomActionBarConfig(
+                      backgroundColor: const Color(0xFFF3F4F6),
+                      buttonColor: const Color(0xFFF3F4F6),
+                      buttonIconColor: const Color(0xFF374151),
+                      showBackspaceButton: true,
+                      showSearchViewButton: true,
+                      customBottomActionBar: (config, state, showSearchView) {
+                        return Container(
+                          height: 46,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF3F4F6),
+                            border: Border(
+                              top: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                            ),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                tooltip: 'Search emoji',
+                                icon: const Icon(
+                                  Icons.search_rounded,
+                                  color: Color(0xFF4B5563),
+                                  size: 22,
+                                ),
+                                onPressed: showSearchView,
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                tooltip: 'Backspace',
+                                icon: const Icon(
+                                  Icons.backspace_outlined,
+                                  color: Color(0xFF4B5563),
+                                  size: 20,
+                                ),
+                                onPressed: _handleBackspace,
+                              ),
+                              IconButton(
+                                tooltip: 'Close',
+                                icon: const Icon(
+                                  Icons.keyboard_hide_rounded,
+                                  color: Color(0xFF10B981),
+                                  size: 24,
+                                ),
+                                onPressed: () {
+                                  if (mounted) {
+                                    setState(() => _showEmojiPicker = false);
+                                  }
+                                  _focusNode.unfocus();
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    searchViewConfig: const SearchViewConfig(
+                      backgroundColor: Color(0xFFF9FAFB),
+                      buttonIconColor: Color(0xFF10B981),
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1296,31 +1409,39 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
         ),
       );
     }
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      itemCount:
-          _messages.length +
-          (_remoteIsTyping ? 1 : 0) +
-          (_isLoadingOlder ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (_isLoadingOlder && index == 0) {
-          return const Padding(
-            padding: EdgeInsets.all(8),
-            child: Center(
-              child: SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          );
-        }
-        final messageIndex = index - (_isLoadingOlder ? 1 : 0);
-        if (_remoteIsTyping && messageIndex == _messages.length) {
-          return _buildTypingBubble();
-        }
-        return _buildMessageBubble(_messages[messageIndex]);
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () {
+        if (_showEmojiPicker) setState(() => _showEmojiPicker = false);
+        _focusNode.unfocus();
       },
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        itemCount:
+            _messages.length +
+            (_remoteIsTyping ? 1 : 0) +
+            (_isLoadingOlder ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (_isLoadingOlder && index == 0) {
+            return const Padding(
+              padding: EdgeInsets.all(8),
+              child: Center(
+                child: SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            );
+          }
+          final messageIndex = index - (_isLoadingOlder ? 1 : 0);
+          if (_remoteIsTyping && messageIndex == _messages.length) {
+            return _buildTypingBubble();
+          }
+          final message = _messages[messageIndex];
+          return _buildMessageBubble(message);
+        },
+      ),
     );
   }
 
@@ -1346,7 +1467,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(mine ? 0.1 : 0.06),
+                  color: Colors.black.withValues(alpha: mine ? 0.1 : 0.06),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -1363,7 +1484,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                       child: Text(
                         '↪ Forwarded',
                         style: TextStyle(
-                          color: foreground.withOpacity(.65),
+                          color: foreground.withValues(alpha: .65),
                           fontSize: 11,
                           fontStyle: FontStyle.italic,
                         ),
@@ -1422,14 +1543,14 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                       Icon(
                         Icons.schedule,
                         size: 13,
-                        color: foreground.withOpacity(.6),
+                        color: foreground.withValues(alpha: .6),
                       ),
                     ],
                     if (message.isPinned) ...[
                       Icon(
                         Icons.push_pin,
                         size: 12,
-                        color: foreground.withOpacity(.7),
+                        color: foreground.withValues(alpha: .7),
                       ),
                       const SizedBox(width: 3),
                     ],
@@ -1437,7 +1558,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                       Text(
                         ' edited',
                         style: TextStyle(
-                          color: foreground.withOpacity(.6),
+                          color: foreground.withValues(alpha: .6),
                           fontSize: 10,
                         ),
                       ),
@@ -1445,7 +1566,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                     Text(
                       message.formattedTime,
                       style: TextStyle(
-                        color: foreground.withOpacity(.6),
+                        color: foreground.withValues(alpha: .6),
                         fontSize: 10,
                       ),
                     ),
@@ -1725,11 +1846,22 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
 
   Widget _buildInputArea() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      decoration: const BoxDecoration(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+      decoration: BoxDecoration(
         color: Colors.white,
+        border: const Border(
+          top: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            offset: const Offset(0, -2),
+            blurRadius: 4,
+          ),
+        ],
       ),
       child: SafeArea(
+        top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1746,22 +1878,26 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
     final editing = _editingMsg;
     final target = editing ?? _replyingTo!;
     final preview = (target.message ?? '').trim();
+    final isEdit = editing != null;
     return Container(
-      margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-      padding: const EdgeInsets.fromLTRB(10, 7, 4, 7),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(10),
-        border: const Border(
-          left: BorderSide(color: Colors.black, width: 3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(
+            color: isEdit ? const Color(0xFF3B82F6) : const Color(0xFF10B981),
+            width: 3.5,
+          ),
         ),
       ),
       child: Row(
         children: [
           Icon(
-            editing == null ? Icons.reply : Icons.edit,
+            isEdit ? Icons.edit_rounded : Icons.reply_rounded,
             size: 18,
-            color: Colors.black,
+            color: isEdit ? const Color(0xFF3B82F6) : const Color(0xFF10B981),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -1769,25 +1905,31 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  editing == null ? 'Replying' : 'Editing message',
-                  style: const TextStyle(
-                    color: Colors.black,
+                  isEdit ? 'Editing message' : 'Replying',
+                  style: TextStyle(
+                    color: isEdit ? const Color(0xFF1D4ED8) : const Color(0xFF047857),
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   preview.isEmpty ? target.messageType : preview,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF4B5563),
+                  ),
                 ),
               ],
             ),
           ),
           IconButton(
             tooltip: 'Cancel',
-            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            splashRadius: 14,
             onPressed: () {
               setState(() {
                 if (_editingMsg != null) _messageController.clear();
@@ -1795,7 +1937,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                 _replyingTo = null;
               });
             },
-            icon: const Icon(Icons.close, size: 18),
+            icon: const Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
           ),
         ],
       ),
@@ -1803,80 +1945,167 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
   }
 
   Widget _buildStandardInput() {
+    final hasActionText = _editingMsg != null || _isTyping;
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        IconButton(
-          tooltip: 'Take photo',
-          icon: const Icon(Icons.camera_alt_outlined, color: Colors.black, size: 26),
-          onPressed: _pickFromCamera,
-        ),
-        IconButton(
-          tooltip: 'Choose photo or video',
-          icon: const Icon(Icons.image_outlined, color: Colors.black, size: 26),
-          onPressed: _pickFromGallery,
-        ),
-        IconButton(
-          tooltip: 'Choose emoji',
-          icon: Icon(
-            _showEmojiPicker
-                ? Icons.keyboard_outlined
-                : Icons.sentiment_satisfied_alt_outlined,
-            color: Colors.black,
-            size: 26,
-          ),
-          onPressed: () {
-            setState(() => _showEmojiPicker = !_showEmojiPicker);
-            if (_showEmojiPicker) {
-              _focusNode.unfocus();
-            } else {
-              _focusNode.requestFocus();
-            }
-          },
-        ),
+        // Main Input Pill
         Expanded(
           child: Container(
             constraints: const BoxConstraints(maxHeight: 120),
             decoration: BoxDecoration(
-              color: Colors.black, // Black text field pill
+              color: const Color(0xFFF3F4F6),
               borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
             ),
-            child: TextField(
-              controller: _messageController,
-              focusNode: _focusNode,
-              minLines: 1,
-              maxLines: 4,
-              style: const TextStyle(color: Colors.white, fontSize: 15),
-              decoration: const InputDecoration(
-                hintText: 'Type your message here!',
-                hintStyle: TextStyle(color: Colors.white60, fontSize: 14),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // Emoji Icon inside the pill
+                IconButton(
+                  tooltip: 'Choose emoji',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+                  splashRadius: 18,
+                  icon: Icon(
+                    _showEmojiPicker
+                        ? Icons.keyboard_outlined
+                        : Icons.sentiment_satisfied_alt_outlined,
+                    color: const Color(0xFF6B7280),
+                    size: 24,
+                  ),
+                  onPressed: () {
+                    if (_showEmojiPicker) {
+                      setState(() => _showEmojiPicker = false);
+                      _focusNode.requestFocus();
+                    } else {
+                      _focusNode.unfocus();
+                      Future.delayed(const Duration(milliseconds: 100), () {
+                        if (mounted) setState(() => _showEmojiPicker = true);
+                      });
+                    }
+                  },
                 ),
-              ),
+                // Text Field
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    child: TextField(
+                      controller: _messageController,
+                      focusNode: _focusNode,
+                      minLines: 1,
+                      maxLines: 5,
+                      textCapitalization: TextCapitalization.sentences,
+                      onTap: () {
+                        if (_showEmojiPicker) {
+                          setState(() => _showEmojiPicker = false);
+                        }
+                      },
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 15,
+                        height: 1.3,
+                      ),
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        hintText: 'Type a message...',
+                        hintStyle: TextStyle(
+                          color: Color(0xFF9CA3AF),
+                          fontSize: 15,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                ),
+                // Gallery / Attach Media Button
+                if (!_isTyping) ...[
+                  IconButton(
+                    tooltip: 'Attach media',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 38),
+                    splashRadius: 18,
+                    icon: const Icon(
+                      Icons.attach_file_rounded,
+                      color: Color(0xFF6B7280),
+                      size: 22,
+                    ),
+                    onPressed: _pickFromGallery,
+                  ),
+                  IconButton(
+                    tooltip: 'Take photo',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 38),
+                    splashRadius: 18,
+                    icon: const Icon(
+                      Icons.camera_alt_outlined,
+                      color: Color(0xFF6B7280),
+                      size: 22,
+                    ),
+                    onPressed: _pickFromCamera,
+                  ),
+                ] else ...[
+                  IconButton(
+                    tooltip: 'Attach photo/video',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 38),
+                    splashRadius: 18,
+                    icon: const Icon(
+                      Icons.add_circle_outline_rounded,
+                      color: Color(0xFF6B7280),
+                      size: 22,
+                    ),
+                    onPressed: _pickFromGallery,
+                  ),
+                ],
+              ],
             ),
           ),
         ),
         const SizedBox(width: 8),
-        IconButton(
-          icon: Icon(
-            _editingMsg != null
-                ? Icons.check_rounded
-                : _isTyping
-                    ? Icons.send_rounded
-                    : Icons.mic_none_outlined,
-            color: Colors.black,
-            size: 26,
-          ),
-          onPressed: () {
+        // Dedicated Circular Action Button (Send / Mic)
+        GestureDetector(
+          onTap: () {
             if (_editingMsg != null || _isTyping) {
               _sendText();
             } else {
               _startRecording();
             }
           },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: hasActionText ? const Color(0xFF10B981) : const Color(0xFFF3F4F6),
+              shape: BoxShape.circle,
+              border: hasActionText
+                  ? null
+                  : Border.all(color: const Color(0xFFE5E7EB), width: 1),
+              boxShadow: hasActionText
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Center(
+              child: Icon(
+                _editingMsg != null
+                    ? Icons.check_rounded
+                    : _isTyping
+                        ? Icons.send_rounded
+                        : Icons.mic_none_outlined,
+                color: hasActionText ? Colors.white : const Color(0xFF374151),
+                size: 22,
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -1884,33 +2113,72 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
 
   Widget _buildRecordingUi() {
     return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.circular(26),
+        color: const Color(0xFFFEE2E2),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFFCA5A5), width: 1),
       ),
       child: Row(
         children: [
-          const SizedBox(width: 8),
           FadeTransition(
             opacity: _pulseController,
-            child: const Icon(Icons.mic, color: Colors.red),
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEF4444),
+                shape: BoxShape.circle,
+              ),
+            ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Text(
             _formatDuration(_recordingDuration),
-            style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFDC2626),
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Text(
+            'Recording voice note...',
+            style: TextStyle(
+              color: Color(0xFF991B1B),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           const Spacer(),
           TextButton(
             onPressed: _cancelRecording,
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              visualDensity: VisualDensity.compact,
+            ),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: Color(0xFFDC2626),
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
           ),
-          IconButton(
-            tooltip: 'Send voice note',
-            onPressed: _finishRecording,
-            icon: const Icon(Icons.send, color: Colors.white),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: _finishRecording,
+            child: Container(
+              width: 34,
+              height: 34,
+              decoration: const BoxDecoration(
+                color: Color(0xFF10B981),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+            ),
           ),
         ],
       ),

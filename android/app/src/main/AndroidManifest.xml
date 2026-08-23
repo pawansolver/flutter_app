@@ -17,7 +17,7 @@
     -->
 
     <application
-        android:label="my_first_app"
+        android:label="SmartGali"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

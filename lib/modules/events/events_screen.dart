@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dashboard/main_dashboard.dart';
 import '../../widgets/custom_drawer.dart';
 
 class EventsScreen extends StatefulWidget {
@@ -167,20 +168,43 @@ class _EventsScreenState extends State<EventsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFE1EAE4),
-      drawer: const CustomDrawer(),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: Color(0xFF111827)),
-            onPressed: () {
-              Scaffold.of(context).openDrawer();
-            },
-          ),
-        ),
+    void handleBack() {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainDashboard()),
+          (route) => false,
+        );
+      }
+    }
+
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFE1EAE4),
+        drawer: const CustomDrawer(),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: Navigator.canPop(context)
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
+                  onPressed: handleBack,
+                )
+              : Builder(
+                  builder: (context) => IconButton(
+                    icon: const Icon(Icons.menu, color: Color(0xFF111827)),
+                    onPressed: () {
+                      Scaffold.of(context).openDrawer();
+                    },
+                  ),
+                ),
         title: const Text(
           'neighbourhood Events',
           style: TextStyle(
@@ -435,6 +459,7 @@ class _EventsScreenState extends State<EventsScreen> {
           'Create Local Event',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
+      ),
       ),
     );
   }

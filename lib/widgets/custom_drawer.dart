@@ -189,12 +189,20 @@ class CustomDrawer extends StatelessWidget {
                             >() !=
                         null,
                     onTap: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const SocietyDashboardScreen(),
-                        ),
-                      );
+                      final isCurrent =
+                          context.findAncestorWidgetOfExactType<
+                            SocietyDashboardScreen
+                          >() !=
+                          null;
+                      Navigator.pop(context);
+                      if (!isCurrent) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SocietyDashboardScreen(),
+                          ),
+                        );
+                      }
                     },
                   ),
                   _buildMenuItem(
@@ -204,10 +212,18 @@ class CustomDrawer extends StatelessWidget {
                         context.findAncestorWidgetOfExactType<EventsScreen>() !=
                         null,
                     onTap: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const EventsScreen()),
-                      );
+                      final isCurrent =
+                          context.findAncestorWidgetOfExactType<EventsScreen>() !=
+                          null;
+                      Navigator.pop(context);
+                      if (!isCurrent) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const EventsScreen(),
+                          ),
+                        );
+                      }
                     },
                   ),
                   const SizedBox(height: 12),
@@ -220,12 +236,20 @@ class CustomDrawer extends StatelessWidget {
                             .findAncestorWidgetOfExactType<DiscoverScreen>() !=
                         null,
                     onTap: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const DiscoverScreen(),
-                        ),
-                      );
+                      final isCurrent =
+                          context.findAncestorWidgetOfExactType<
+                            DiscoverScreen
+                          >() !=
+                          null;
+                      Navigator.pop(context);
+                      if (!isCurrent) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const DiscoverScreen(),
+                          ),
+                        );
+                      }
                     },
                   ),
                   _buildMenuItem(
@@ -238,12 +262,20 @@ class CustomDrawer extends StatelessWidget {
                             >() !=
                         null,
                     onTap: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const CommunityGroupsScreen(),
-                        ),
-                      );
+                      final isCurrent =
+                          context.findAncestorWidgetOfExactType<
+                            CommunityGroupsScreen
+                          >() !=
+                          null;
+                      Navigator.pop(context);
+                      if (!isCurrent) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CommunityGroupsScreen(),
+                          ),
+                        );
+                      }
                     },
                   ),
                   _buildMenuItem(
@@ -256,12 +288,20 @@ class CustomDrawer extends StatelessWidget {
                             >() !=
                         null,
                     onTap: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const MyBookingsScreen(),
-                        ),
-                      );
+                      final isCurrent =
+                          context.findAncestorWidgetOfExactType<
+                            MyBookingsScreen
+                          >() !=
+                          null;
+                      Navigator.pop(context);
+                      if (!isCurrent) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MyBookingsScreen(),
+                          ),
+                        );
+                      }
                     },
                   ),
                   _buildMenuItem(
@@ -285,12 +325,20 @@ class CustomDrawer extends StatelessWidget {
                             >() !=
                         null,
                     onTap: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ProviderDashboardScreen(),
-                        ),
-                      );
+                      final isCurrent =
+                          context.findAncestorWidgetOfExactType<
+                            ProviderDashboardScreen
+                          >() !=
+                          null;
+                      Navigator.pop(context);
+                      if (!isCurrent) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ProviderDashboardScreen(),
+                          ),
+                        );
+                      }
                     },
                   ),
                   _buildMenuItem(
@@ -301,12 +349,20 @@ class CustomDrawer extends StatelessWidget {
                             .findAncestorWidgetOfExactType<SettingsScreen>() !=
                         null,
                     onTap: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const SettingsScreen(),
-                        ),
-                      );
+                      final isCurrent =
+                          context.findAncestorWidgetOfExactType<
+                            SettingsScreen
+                          >() !=
+                          null;
+                      Navigator.pop(context);
+                      if (!isCurrent) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SettingsScreen(),
+                          ),
+                        );
+                      }
                     },
                   ),
                 ],

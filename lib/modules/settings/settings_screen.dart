@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dashboard/main_dashboard.dart';
 import '../profile/edit_profile_screen.dart';
 import '../profile/help_support_screen.dart';
 import '../profile/notification_preferences_screen.dart';
@@ -131,26 +132,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.white,
-        centerTitle: false,
-        title: const Text(
-          'Settings',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: _AppColors.primaryText,
+    void handleBack() {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainDashboard()),
+          (route) => false,
+        );
+      }
+    }
+
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: _AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          surfaceTintColor: Colors.white,
+          centerTitle: false,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: _AppColors.primaryText),
+            onPressed: handleBack,
+          ),
+          title: const Text(
+            'Settings',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: _AppColors.primaryText,
+            ),
+          ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(height: 1, color: _AppColors.border),
           ),
         ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: _AppColors.border),
-        ),
-      ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,6 +347,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 40),
           ],
         ),
+      ),
       ),
     );
   }

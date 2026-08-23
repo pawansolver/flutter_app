@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dashboard/main_dashboard.dart';
 import 'community_detail_screen.dart';
 
 class CommunityGroupsScreen extends StatefulWidget {
@@ -11,6 +12,18 @@ class CommunityGroupsScreen extends StatefulWidget {
 class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+
+  void _handleBack() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const MainDashboard()),
+        (route) => false,
+      );
+    }
+  }
 
   final List<Map<String, dynamic>> _myGroups = [
     {
@@ -59,53 +72,60 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFE1EAE4),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Interest Groups',
-          style: TextStyle(
-            color: Color(0xFF111827),
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFE1EAE4),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
+            onPressed: _handleBack,
+          ),
+          title: const Text(
+            'Interest Groups',
+            style: TextStyle(
+              color: Color(0xFF111827),
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          bottom: TabBar(
+            controller: _tabController,
+            labelColor: const Color(0xFFFF6B00),
+            unselectedLabelColor: Colors.grey,
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            indicatorColor: const Color(0xFFFF6B00),
+            indicatorWeight: 2.5,
+            tabs: const [
+              Tab(text: 'My Groups'),
+              Tab(text: 'Discover New'),
+            ],
           ),
         ),
-        bottom: TabBar(
+        body: TabBarView(
           controller: _tabController,
-          labelColor: const Color(0xFFFF6B00),
-          unselectedLabelColor: Colors.grey,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          indicatorColor: const Color(0xFFFF6B00),
-          indicatorWeight: 2.5,
-          tabs: const [
-            Tab(text: 'My Groups'),
-            Tab(text: 'Discover New'),
+          children: [
+            _buildMyGroupsTab(),
+            _buildDiscoverTab(),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildMyGroupsTab(),
-          _buildDiscoverTab(),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFFFF6B00),
-        elevation: 0,
-        onPressed: () {
-          // Action for creating a new group
-        },
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'Create Group',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        floatingActionButton: FloatingActionButton.extended(
+          backgroundColor: const Color(0xFFFF6B00),
+          elevation: 0,
+          onPressed: () {
+            // Action for creating a new group
+          },
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: const Text(
+            'Create Group',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
         ),
       ),
     );

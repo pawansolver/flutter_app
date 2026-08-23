@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dashboard/main_dashboard.dart';
 
 // ─── Colors ────────────────────────────────────────────────────────
 class _C {
@@ -496,48 +497,71 @@ class _ParkingScreenState extends State<ParkingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _C.bg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.white,
-        centerTitle: false,
-        title: const Text(
-          'Parking Management',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: _C.text,
+    void handleBack() {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainDashboard()),
+          (route) => false,
+        );
+      }
+    }
+
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: _C.bg,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          surfaceTintColor: Colors.white,
+          centerTitle: false,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: _C.text),
+            onPressed: handleBack,
+          ),
+          title: const Text(
+            'Parking Management',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: _C.text,
+            ),
+          ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(height: 1, color: _C.border),
           ),
         ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: _C.border),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showRequestGuestSlot,
-        backgroundColor: _C.orange,
-        foregroundColor: Colors.white,
-        elevation: 2,
-        icon: const Icon(Icons.add),
-        label: const Text(
-          'Request Guest Slot',
-          style:
-              TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-        ),
-      ),
-      body: Column(
-        children: [
-          _buildTabBar(),
-          const SizedBox(height: 16),
-          Expanded(
-            child: _selectedTab == 0
-                ? _buildMyVehiclesTab()
-                : _buildVisitorTab(),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _showRequestGuestSlot,
+          backgroundColor: _C.orange,
+          foregroundColor: Colors.white,
+          elevation: 2,
+          icon: const Icon(Icons.add),
+          label: const Text(
+            'Request Guest Slot',
+            style:
+                TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
           ),
-        ],
+        ),
+        body: Column(
+          children: [
+            _buildTabBar(),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _selectedTab == 0
+                  ? _buildMyVehiclesTab()
+                  : _buildVisitorTab(),
+            ),
+          ],
+        ),
       ),
     );
   }

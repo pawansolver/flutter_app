@@ -1,8 +1,8 @@
-﻿import '../../../core/api_config.dart';
+import '../../../core/api_config.dart';
 
 class FeedPost {
   final int id;
-  final String content;
+  String content;
   final String? mediaUrl;
   final List<FeedMedia> mediaUrls;  // multi-image support
   int likesCount;
@@ -16,6 +16,11 @@ class FeedPost {
   final String? authorAvatarUrl;
   final int? authorUserId;
   final String? authorUserName;
+  bool isPinned;
+  bool commentsDisabled;
+  bool isEdited;
+  String visibility;
+  final String? locationName;
 
   FeedPost({
     required this.id,
@@ -33,6 +38,11 @@ class FeedPost {
     this.authorAvatarUrl,
     this.authorUserId,
     this.authorUserName,
+    this.isPinned = false,
+    this.commentsDisabled = false,
+    this.isEdited = false,
+    this.visibility = 'public',
+    this.locationName,
   });
 
   // Returns true if this post has any media
@@ -46,7 +56,21 @@ class FeedPost {
   }
 
   // Returns true if this is a video post
-  bool get isVideo => postType == 'video';
+  bool get isVideo =>
+      postType == 'video' ||
+      (effectiveMediaUrl != null && isVideoUrl(effectiveMediaUrl!)) ||
+      (mediaUrls.isNotEmpty && mediaUrls.any((m) => m.type == 'video' || isVideoUrl(m.url)));
+
+  static bool isVideoUrl(String url) {
+    final lower = url.toLowerCase().split('?').first;
+    return lower.endsWith('.mp4') ||
+        lower.endsWith('.mov') ||
+        lower.endsWith('.avi') ||
+        lower.endsWith('.mkv') ||
+        lower.endsWith('.webm') ||
+        lower.endsWith('.m4v') ||
+        lower.contains('/video');
+  }
 
   static String _safeString(dynamic val, String fallback) {
     if (val == null) return fallback;
@@ -84,39 +108,49 @@ class FeedPost {
 
     final authorUserName = authorMap?['userName']?.toString();
 
-    // Parse mediaUrls array (multi-image)
+    // Parse mediaUrls array (multi-image / multi-media)
     final mediaUrlsList = <FeedMedia>[];
     if (json['mediaUrls'] is List) {
       for (final m in (json['mediaUrls'] as List)) {
         if (m is Map) {
-          final url = ApiConfig.normalizeMediaUrl(m['url']?.toString());
+          final rawUrl = m['url']?.toString() ?? m['media_url']?.toString();
+          final url = ApiConfig.normalizeMediaUrl(rawUrl);
           if (url != null && url.isNotEmpty) {
+            final mediaType = _safeString(m['type'], isVideoUrl(url) ? 'video' : 'image');
             mediaUrlsList.add(FeedMedia(
               id: _safeInt(m['id'], 0),
               url: url,
-              type: _safeString(m['type'], 'image'),
+              type: mediaType,
             ));
           }
         }
       }
     }
 
+    final rawPrimaryMedia = json['mediaUrl']?.toString() ?? json['media_url']?.toString();
+    final primaryMediaUrl = ApiConfig.normalizeMediaUrl(rawPrimaryMedia);
+
     return FeedPost(
       id: _safeInt(json['id'], 0),
       content: _safeString(json['content'], ''),
-      mediaUrl: ApiConfig.normalizeMediaUrl(json['mediaUrl']?.toString()),
+      mediaUrl: primaryMediaUrl,
       mediaUrls: mediaUrlsList,
       likesCount: _safeInt(json['likeCount'] ?? json['likesCount'], 0),
       commentsCount: _safeInt(json['commentCount'] ?? json['commentsCount'], 0),
       isLikedByMe: _safeBool(json['isLikedByMe'], false),
       createdAt: _safeString(json['createdAt'], ''),
       isSaved: _safeBool(json['isSaved'], false),
-      shareCount: _safeInt(json['shareCount'], 0),
-      postType: _safeString(json['postType'], 'text'),
+      shareCount: _safeInt(json['shareCount'] ?? json['shares_count'], 0),
+      postType: _safeString(json['postType'] ?? json['type'], 'text'),
       authorName: fullName,
       authorAvatarUrl: avatarUrl,
       authorUserId: authorUserId,
       authorUserName: authorUserName,
+      isPinned: _safeBool(json['isPinned'] ?? json['is_pinned'], false),
+      commentsDisabled: _safeBool(json['commentsDisabled'] ?? json['comments_disabled'], false),
+      isEdited: _safeBool(json['isEdited'] ?? json['is_edited'], false),
+      visibility: _safeString(json['visibility'], 'public'),
+      locationName: json['locationName']?.toString() ?? json['location_name']?.toString(),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dashboard/main_dashboard.dart';
 
 class ProviderDashboardScreen extends StatefulWidget {
   const ProviderDashboardScreen({Key? key}) : super(key: key);
@@ -10,6 +11,18 @@ class ProviderDashboardScreen extends StatefulWidget {
 class _ProviderDashboardScreenState extends State<ProviderDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+
+  void _handleBack() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const MainDashboard()),
+        (route) => false,
+      );
+    }
+  }
 
   final List<Map<String, dynamic>> _newRequests = [
     {
@@ -63,23 +76,29 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFE1EAE4),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Provider Center',
-          style: TextStyle(
-            color: Color(0xFF111827),
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFE1EAE4),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
+            onPressed: _handleBack,
           ),
-        ),
+          title: const Text(
+            'Provider Center',
+            style: TextStyle(
+              color: Color(0xFF111827),
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
           child: Container(color: const Color(0xFFE5E7EB), height: 1.0),
@@ -133,6 +152,7 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen>
             ),
           ),
         ],
+      ),
       ),
     );
   }

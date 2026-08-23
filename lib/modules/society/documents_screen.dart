@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dashboard/main_dashboard.dart';
 
 // ─── Colors ────────────────────────────────────────────────────────
 class _C {
@@ -317,53 +318,77 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   @override
   Widget build(BuildContext context) {
     final docs = _filtered;
-    return Scaffold(
-      backgroundColor: _C.bg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.white,
-        centerTitle: false,
-        title: const Text(
-          'Society Documents',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: _C.text,
+
+    void handleBack() {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainDashboard()),
+          (route) => false,
+        );
+      }
+    }
+
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: _C.bg,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          surfaceTintColor: Colors.white,
+          centerTitle: false,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: _C.text),
+            onPressed: handleBack,
           ),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: _C.border),
-        ),
-      ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Row(
-              children: [
-                Text(
-                  '${docs.length} document${docs.length == 1 ? '' : 's'}',
-                  style:
-                      const TextStyle(fontSize: 13, color: _C.sub),
-                ),
-              ],
+          title: const Text(
+            'Society Documents',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: _C.text,
             ),
           ),
-          Expanded(
-            child: docs.isEmpty
-                ? _buildEmpty()
-                : ListView.builder(
-                    padding:
-                        const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                    itemCount: docs.length,
-                    itemBuilder: (_, i) => _buildDocTile(docs[i]),
-                  ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(height: 1, color: _C.border),
           ),
-        ],
+        ),
+        body: Column(
+          children: [
+            _buildSearchBar(),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Row(
+                children: [
+                  Text(
+                    '${docs.length} document${docs.length == 1 ? '' : 's'}',
+                    style:
+                        const TextStyle(fontSize: 13, color: _C.sub),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: docs.isEmpty
+                  ? _buildEmpty()
+                  : ListView.builder(
+                      padding:
+                          const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                      itemCount: docs.length,
+                      itemBuilder: (_, i) => _buildDocTile(docs[i]),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
