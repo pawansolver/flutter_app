@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../dashboard/main_dashboard.dart';
 import '../../widgets/custom_drawer.dart';
+import '../community/community_groups_screen.dart';
 import '../profile/follow_service.dart';
 import '../profile/user_profile_screen.dart';
 
@@ -191,8 +192,79 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             ),
             const Divider(height: 1, color: Color(0xFFE5E7EB)),
             
+            // Communities & Groups Banner
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CommunityGroupsScreen(),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF8A00), Color(0xFFFF6B00)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF6B00).withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(Icons.groups_rounded, color: Colors.white, size: 28),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Explore Communities',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Join neighborhood clubs, sports & groups',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            
             const Padding(
-              padding: EdgeInsets.fromLTRB(16, 24, 16, 12),
+              padding: EdgeInsets.fromLTRB(16, 20, 16, 12),
               child: Text(
                 'People on SmartGali',
                 style: TextStyle(

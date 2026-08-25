@@ -109,6 +109,8 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
       ..addMessageEditedListener(_onMessageEdited)
       ..addMessageDeletedListener(_onMessageDeleted)
       ..addMessagePinnedListener(_onMessagePinned)
+      ..addMessageDeliveredListener(_onMessageDelivered)
+      ..addMessageReadListener(_onMessageRead)
       ..addTypingListener(_onSocketTyping)
       ..addPresenceListener(_onPresenceChange);
     _loadMessages();
@@ -137,6 +139,8 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
       ..removeMessageEditedListener(_onMessageEdited)
       ..removeMessageDeletedListener(_onMessageDeleted)
       ..removeMessagePinnedListener(_onMessagePinned)
+      ..removeMessageDeliveredListener(_onMessageDelivered)
+      ..removeMessageReadListener(_onMessageRead)
       ..removeTypingListener(_onSocketTyping)
       ..removePresenceListener(_onPresenceChange);
     unawaited(_recorder.dispose());
@@ -164,6 +168,11 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
         _isLoading = false;
       });
       unawaited(_chatService.markAllRead(widget.chatId, widget.currentUserId));
+      for (final m in page.messages) {
+        if (m.senderId != widget.currentUserId && m.id > 0 && !m.isRead) {
+          _socketService.emitMessageRead(m.id, widget.chatId);
+        }
+      }
       _scrollToBottom(jump: true);
     } catch (error) {
       if (!mounted) return;
@@ -236,6 +245,10 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
     if (message.chatId != widget.chatId) return;
     _reconcile(message);
     if (message.senderId != widget.currentUserId) {
+      if (message.id > 0) {
+        _socketService.emitMessageDelivered(message.id, widget.chatId);
+        _socketService.emitMessageRead(message.id, widget.chatId);
+      }
       unawaited(_chatService.markAllRead(widget.chatId, widget.currentUserId));
     }
     _scrollToBottom();
@@ -286,6 +299,33 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
       if (index >= 0) {
         _messages[index] = _messages[index].copyWith(
           isPinned: event['is_pinned'] == true,
+        );
+      }
+    });
+  }
+
+  void _onMessageDelivered(Map<String, dynamic> event) {
+    if (!mounted || _eventChatId(event) != widget.chatId) return;
+    final messageId = _eventMessageId(event);
+    if (messageId == null) return;
+    setState(() {
+      final index = _messages.indexWhere((message) => message.id == messageId);
+      if (index >= 0) {
+        _messages[index] = _messages[index].copyWith(isDelivered: true);
+      }
+    });
+  }
+
+  void _onMessageRead(Map<String, dynamic> event) {
+    if (!mounted || _eventChatId(event) != widget.chatId) return;
+    final messageId = _eventMessageId(event);
+    if (messageId == null) return;
+    setState(() {
+      final index = _messages.indexWhere((message) => message.id == messageId);
+      if (index >= 0) {
+        _messages[index] = _messages[index].copyWith(
+          isDelivered: true,
+          isRead: true,
         );
       }
     });
@@ -1205,7 +1245,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFFBF6F0),
         appBar: _buildAppBar(),
         body: Column(
           children: [
@@ -1229,8 +1269,8 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                     ),
                     categoryViewConfig: const CategoryViewConfig(
                       backgroundColor: Color(0xFFF9FAFB),
-                      indicatorColor: Color(0xFF10B981),
-                      iconColorSelected: Color(0xFF10B981),
+                      indicatorColor: Color(0xFFFF6B00),
+                      iconColorSelected: Color(0xFFFF6B00),
                       iconColor: Color(0xFF9CA3AF),
                       dividerColor: Color(0xFFE5E7EB),
                     ),
@@ -1275,7 +1315,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                                 tooltip: 'Close',
                                 icon: const Icon(
                                   Icons.keyboard_hide_rounded,
-                                  color: Color(0xFF10B981),
+                                  color: Color(0xFFFF6B00),
                                   size: 24,
                                 ),
                                 onPressed: () {
@@ -1292,7 +1332,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                     ),
                     searchViewConfig: const SearchViewConfig(
                       backgroundColor: Color(0xFFF9FAFB),
-                      buttonIconColor: Color(0xFF10B981),
+                      buttonIconColor: Color(0xFFFF6B00),
                     ),
                   ),
                 ),
@@ -1447,11 +1487,14 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
 
   Widget _buildMessageBubble(MessageModel message) {
     final mine = message.senderId == widget.currentUserId;
-    final key = message.idempotencyKey;
-    final delivery = key == null ? null : _pending[key];
-    final foreground = mine ? Colors.white : Colors.black;
+    const foreground = Color(0xFF111827);
+    final hasReply = message.replyToMessage != null;
+    final hasForward = message.isForwarded;
+    final isText = message.messageType == 'text';
+    final hasText = (message.message ?? '').trim().isNotEmpty;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Align(
         alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
         child: GestureDetector(
@@ -1461,122 +1504,166 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
             constraints: BoxConstraints(
               maxWidth: MediaQuery.sizeOf(context).width * 0.78,
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: mine ? Colors.black : Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              color: mine ? const Color(0xFFFFE8D6) : Colors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(16),
+                topRight: const Radius.circular(16),
+                bottomLeft: Radius.circular(mine ? 16 : 4),
+                bottomRight: Radius.circular(mine ? 4 : 16),
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: mine ? 0.1 : 0.06),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  color: Colors.black.withValues(alpha: mine ? 0.05 : 0.04),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
                 ),
               ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (message.isForwarded)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 5),
-                      child: Text(
-                        '↪ Forwarded',
-                        style: TextStyle(
-                          color: foreground.withValues(alpha: .65),
-                          fontSize: 11,
-                          fontStyle: FontStyle.italic,
+                if (hasForward)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.reply_rounded,
+                          size: 13,
+                          color: Colors.grey.shade600,
                         ),
-                      ),
+                        const SizedBox(width: 3),
+                        Text(
+                          'Forwarded',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                if (message.replyToMessage != null)
+                if (hasReply)
                   _buildReplyPreview(message.replyToMessage!, mine),
-                _buildTypedContent(message, mine),
-                if ((message.message ?? '').isNotEmpty &&
-                    message.messageType != 'text')
-                  const SizedBox(height: 6),
-                if ((message.message ?? '').isNotEmpty)
-                  Text(
-                    message.message!,
-                    style: TextStyle(color: foreground, fontSize: 14, height: 1.3),
-                  ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (delivery?.state == _DeliveryState.uploading) ...[
-                      SizedBox(
-                        width: 70,
-                        child: LinearProgressIndicator(
-                          value: delivery!.progress == 0
-                              ? null
-                              : delivery.progress,
-                          color: Colors.black,
-                        ),
-                      ),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        tooltip: 'Cancel upload',
-                        onPressed: () => _cancelUpload(message),
-                        icon: Icon(Icons.close, size: 16, color: foreground),
-                      ),
-                    ] else if (delivery?.state == _DeliveryState.failed) ...[
-                      Icon(
-                        Icons.error_outline,
-                        size: 15,
-                        color: Colors.red.shade300,
-                      ),
-                      const SizedBox(width: 3),
+                if (!isText) ...[
+                  _buildTypedContent(message, mine),
+                  if (hasText) const SizedBox(height: 6),
+                ],
+                if (isText)
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.end,
+                    runSpacing: 2,
+                    children: [
                       Text(
-                        'Tap to retry',
-                        style: TextStyle(
-                          color: Colors.red.shade300,
-                          fontSize: 10,
+                        message.message ?? '',
+                        style: const TextStyle(
+                          color: foreground,
+                          fontSize: 15,
+                          height: 1.35,
                         ),
                       ),
-                    ] else if (delivery != null) ...[
-                      Icon(
-                        Icons.schedule,
-                        size: 13,
-                        color: foreground.withValues(alpha: .6),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, bottom: 1),
+                        child: _buildTimeAndStatus(message, mine, foreground),
                       ),
                     ],
-                    if (message.isPinned) ...[
-                      Icon(
-                        Icons.push_pin,
-                        size: 12,
-                        color: foreground.withValues(alpha: .7),
-                      ),
-                      const SizedBox(width: 3),
-                    ],
-                    if (message.isEdited)
+                  )
+                else if (hasText)
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.end,
+                    runSpacing: 2,
+                    children: [
                       Text(
-                        ' edited',
-                        style: TextStyle(
-                          color: foreground.withValues(alpha: .6),
-                          fontSize: 10,
+                        message.message!,
+                        style: const TextStyle(
+                          color: foreground,
+                          fontSize: 14,
+                          height: 1.3,
                         ),
                       ),
-                    const SizedBox(width: 5),
-                    Text(
-                      message.formattedTime,
-                      style: TextStyle(
-                        color: foreground.withValues(alpha: .6),
-                        fontSize: 10,
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, bottom: 1),
+                        child: _buildTimeAndStatus(message, mine, foreground),
                       ),
+                    ],
+                  )
+                else if (message.messageType != 'image')
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: _buildTimeAndStatus(message, mine, foreground),
                     ),
-                  ],
-                ),
+                  ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTimeAndStatus(
+    MessageModel message,
+    bool mine,
+    Color foreground, {
+    bool isOverlay = false,
+  }) {
+    final key = message.idempotencyKey;
+    final delivery = key == null ? null : _pending[key];
+    final color = isOverlay ? Colors.white70 : const Color(0xFF6B7280);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        if (message.isPinned) ...[
+          Icon(Icons.push_pin, size: 10.5, color: color),
+          const SizedBox(width: 2.5),
+        ],
+        if (message.isEdited)
+          Text(
+            'edited ',
+            style: TextStyle(color: color, fontSize: 10),
+          ),
+        Text(
+          message.formattedTime,
+          style: TextStyle(
+            color: color,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        if (mine) ...[
+          const SizedBox(width: 3.5),
+          if (delivery?.state == _DeliveryState.uploading)
+            SizedBox.square(
+              dimension: 11,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                value: delivery!.progress == 0 ? null : delivery.progress,
+                color: const Color(0xFFFF6B00),
+              ),
+            )
+          else if (delivery?.state == _DeliveryState.failed)
+            Icon(Icons.error_outline_rounded, size: 12, color: Colors.red.shade400)
+          else if (delivery != null)
+            Icon(Icons.schedule_rounded, size: 11, color: color)
+          else if (message.isRead)
+            const Icon(Icons.done_all_rounded, size: 14, color: Color(0xFFFF6B00))
+          else if (message.isDelivered)
+            const Icon(Icons.done_all_rounded, size: 14, color: Color(0xFF9CA3AF))
+          else
+            const Icon(Icons.done_rounded, size: 14, color: Color(0xFF9CA3AF)),
+        ],
+      ],
     );
   }
 
@@ -1596,10 +1683,10 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
       margin: const EdgeInsets.only(bottom: 7),
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
       decoration: BoxDecoration(
-        color: mine ? Colors.white10 : const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(9),
+        color: mine ? const Color(0xFFFFD8BF) : const Color(0xFFFFF4EC),
+        borderRadius: BorderRadius.circular(8),
         border: const Border(
-          left: BorderSide(color: Colors.black, width: 3),
+          left: BorderSide(color: Color(0xFFFF6B00), width: 3.5),
         ),
       ),
       child: Text(
@@ -1607,8 +1694,9 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: mine ? Colors.white70 : Colors.black54,
+          color: mine ? const Color(0xFF9A3412) : const Color(0xFF44403C),
           fontSize: 12,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -1684,7 +1772,36 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                   ),
             errorBuilder: (_, _, _) => _mediaFailure('Image failed to load'),
           );
-    return ClipRRect(borderRadius: BorderRadius.circular(12), child: image);
+    final imageWidget = ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: image,
+    );
+    final hasCaption = (message.message ?? '').trim().isNotEmpty;
+    if (hasCaption) return imageWidget;
+
+    final mine = message.senderId == widget.currentUserId;
+    return Stack(
+      children: [
+        imageWidget,
+        Positioned(
+          right: 6,
+          bottom: 6,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: _buildTimeAndStatus(
+              message,
+              mine,
+              Colors.white,
+              isOverlay: true,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildAudio(MessageModel message, bool mine) {
@@ -1745,6 +1862,8 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Slider(
+                      activeColor: const Color(0xFFFF6B00),
+                      inactiveColor: const Color(0xFFE5E7EB),
                       value: position.inMilliseconds
                           .toDouble()
                           .clamp(0.0, max)
@@ -1761,7 +1880,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                           ? 'Playback failed'
                           : '${_formatDuration(position)} / ${_formatDuration(duration)}',
                       style: TextStyle(
-                        color: mine ? Colors.white70 : Colors.grey.shade600,
+                        color: Colors.grey.shade600,
                         fontSize: 10,
                       ),
                     ),
@@ -1788,7 +1907,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
           Icon(
             icon,
             size: 42,
-            color: mine ? Colors.white : Colors.black,
+            color: const Color(0xFFFF6B00),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1796,8 +1915,10 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
               missing ? '$label unavailable' : label,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: mine ? Colors.white : const Color(0xFF111827),
+              style: const TextStyle(
+                color: Color(0xFF111827),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -1887,7 +2008,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
         borderRadius: BorderRadius.circular(12),
         border: Border(
           left: BorderSide(
-            color: isEdit ? const Color(0xFF3B82F6) : const Color(0xFF10B981),
+            color: isEdit ? const Color(0xFF3B82F6) : const Color(0xFFFF6B00),
             width: 3.5,
           ),
         ),
@@ -1897,7 +2018,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
           Icon(
             isEdit ? Icons.edit_rounded : Icons.reply_rounded,
             size: 18,
-            color: isEdit ? const Color(0xFF3B82F6) : const Color(0xFF10B981),
+            color: isEdit ? const Color(0xFF3B82F6) : const Color(0xFFFF6B00),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -1907,9 +2028,9 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                 Text(
                   isEdit ? 'Editing message' : 'Replying',
                   style: TextStyle(
-                    color: isEdit ? const Color(0xFF1D4ED8) : const Color(0xFF047857),
-                    fontWeight: FontWeight.w600,
                     fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isEdit ? const Color(0xFF3B82F6) : const Color(0xFFFF6B00),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -1954,9 +2075,16 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
           child: Container(
             constraints: const BoxConstraints(maxHeight: 120),
             decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 6,
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             child: Row(
@@ -1966,14 +2094,14 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                 IconButton(
                   tooltip: 'Choose emoji',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
-                  splashRadius: 18,
+                  constraints: const BoxConstraints(minWidth: 34, minHeight: 38),
+                  splashRadius: 16,
                   icon: Icon(
                     _showEmojiPicker
                         ? Icons.keyboard_outlined
                         : Icons.sentiment_satisfied_alt_outlined,
                     color: const Color(0xFF6B7280),
-                    size: 24,
+                    size: 22,
                   ),
                   onPressed: () {
                     if (_showEmojiPicker) {
@@ -1990,7 +2118,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                 // Text Field
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
                     child: TextField(
                       controller: _messageController,
                       focusNode: _focusNode,
@@ -2009,7 +2137,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                       ),
                       decoration: const InputDecoration(
                         isDense: true,
-                        hintText: 'Type a message...',
+                        hintText: 'Message',
                         hintStyle: TextStyle(
                           color: Color(0xFF9CA3AF),
                           fontSize: 15,
@@ -2020,51 +2148,38 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                     ),
                   ),
                 ),
-                // Gallery / Attach Media Button
-                if (!_isTyping) ...[
-                  IconButton(
-                    tooltip: 'Attach media',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 38),
-                    splashRadius: 18,
-                    icon: const Icon(
-                      Icons.attach_file_rounded,
-                      color: Color(0xFF6B7280),
-                      size: 22,
-                    ),
-                    onPressed: _pickFromGallery,
+                // Attach Media Button
+                IconButton(
+                  tooltip: 'Attach media',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 30, minHeight: 38),
+                  splashRadius: 16,
+                  icon: const Icon(
+                    Icons.attach_file_rounded,
+                    color: Color(0xFF6B7280),
+                    size: 20,
                   ),
+                  onPressed: _pickFromGallery,
+                ),
+                if (!_isTyping) ...[
                   IconButton(
                     tooltip: 'Take photo',
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 38),
-                    splashRadius: 18,
+                    constraints: const BoxConstraints(minWidth: 30, minHeight: 38),
+                    splashRadius: 16,
                     icon: const Icon(
                       Icons.camera_alt_outlined,
                       color: Color(0xFF6B7280),
-                      size: 22,
+                      size: 20,
                     ),
                     onPressed: _pickFromCamera,
-                  ),
-                ] else ...[
-                  IconButton(
-                    tooltip: 'Attach photo/video',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 38),
-                    splashRadius: 18,
-                    icon: const Icon(
-                      Icons.add_circle_outline_rounded,
-                      color: Color(0xFF6B7280),
-                      size: 22,
-                    ),
-                    onPressed: _pickFromGallery,
                   ),
                 ],
               ],
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         // Dedicated Circular Action Button (Send / Mic)
         GestureDetector(
           onTap: () {
@@ -2079,20 +2194,16 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: hasActionText ? const Color(0xFF10B981) : const Color(0xFFF3F4F6),
+              color: hasActionText ? const Color(0xFFFF6B00) : const Color(0xFF111827),
               shape: BoxShape.circle,
-              border: hasActionText
-                  ? null
-                  : Border.all(color: const Color(0xFFE5E7EB), width: 1),
-              boxShadow: hasActionText
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.35),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                  : null,
+              boxShadow: [
+                BoxShadow(
+                  color: (hasActionText ? const Color(0xFFFF6B00) : Colors.black)
+                      .withValues(alpha: 0.3),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Center(
               child: Icon(
@@ -2100,9 +2211,9 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
                     ? Icons.check_rounded
                     : _isTyping
                         ? Icons.send_rounded
-                        : Icons.mic_none_outlined,
-                color: hasActionText ? Colors.white : const Color(0xFF374151),
-                size: 22,
+                        : Icons.mic_none_rounded,
+                color: Colors.white,
+                size: 20,
               ),
             ),
           ),

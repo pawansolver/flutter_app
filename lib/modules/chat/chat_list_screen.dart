@@ -325,7 +325,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
-                      color: Colors.black, // Black unread badge
+                      color: Color(0xFFFF6B00), // SmartGali Orange unread badge
                       shape: BoxShape.circle,
                     ),
                     constraints: const BoxConstraints(

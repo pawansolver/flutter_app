@@ -2,48 +2,50 @@ import 'package:flutter/foundation.dart';
 import 'dart:io' show Platform;
 
 class ApiConfig {
+  /// Toggle to easily switch between Localhost backend and Live Production Server.
+  /// When true (or in debug mode), the app connects to the local backend on port 5000.
+  static const bool useLocalhost = true;
+
   /// Live Production API URL
   static const String _productionUrl = 'https://api.smartgali.com/api/v1';
+
+  /// Local Machine Wi-Fi IP (for physical Android/iOS device testing over Wi-Fi)
+  static const String localLanIp = '10.19.176.105';
+  static const int localPort = 5000;
 
   static const String _configuredUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: '',
   );
 
-  /// Local dev URLs — ONLY used when running on emulator/simulator via `flutter run`.
-  /// These IPs do NOT work on real physical devices.
-  static String get _emulatorUrl {
+  /// Local dev URLs automatically resolved based on runtime platform:
+  /// - Web (Chrome/Edge): http://127.0.0.1:5000/api/v1
+  /// - Android Emulator: http://10.0.2.2:5000/api/v1 (10.0.2.2 routes to host localhost)
+  /// - iOS Simulator / macOS / Windows Desktop: http://localhost:5000/api/v1
+  static String get _localDevUrl {
     if (kIsWeb) {
-      return 'http://127.0.0.1:5000/api/v1'; // Chrome / Web browser
+      return 'http://127.0.0.1:$localPort/api/v1'; // Chrome / Web browser
     } else if (Platform.isAndroid) {
-      return 'http://10.0.2.2:5000/api/v1'; // Android Emulator only
+      return 'http://10.0.2.2:$localPort/api/v1'; // Android Emulator
+    } else if (Platform.isIOS) {
+      return 'http://localhost:$localPort/api/v1'; // iOS Simulator
     } else {
-      return 'http://localhost:5000/api/v1'; // iOS Simulator only
+      return 'http://localhost:$localPort/api/v1'; // Desktop (Windows/Mac/Linux)
     }
   }
 
   static bool get _hasCustomUrl => _configuredUrl.trim().isNotEmpty;
 
-  /// Returns true only when running inside an emulator/simulator via `flutter run`.
-  /// Real physical devices always return false — so they use the Render URL.
-  static bool get _isEmulator {
-    // Only possible in debug/profile mode. Release builds never use emulator URLs.
-    if (kReleaseMode) return false;
-    // Check dart-define flag set by launch configs for emulator/simulator sessions.
-    const runEnv = String.fromEnvironment('RUN_ENV', defaultValue: '');
-    return runEnv == 'emulator';
-  }
-
-  /// Base URL resolution (priority order):\
+  /// Base URL resolution (priority order):
   ///  1. --dart-define=API_BASE_URL  → explicit override (always wins)
-  ///  2. Emulator/Simulator session  → localhost URL (only via flutter run with RUN_ENV=emulator)
-  ///  3. Everything else             → Current local machine IP
+  ///  2. useLocalhost = true / Debug → Localhost dev URLs (10.0.2.2 / 127.0.0.1 / localhost)
+  ///  3. Release Mode                → Live Production URL
   static String get baseUrl {
     String selected;
     if (_hasCustomUrl) {
       selected = _configuredUrl.trim();
-    } else if (_isEmulator) {
-      selected = _emulatorUrl;
+    } else if (useLocalhost || !kReleaseMode) {
+      selected = _localDevUrl;
     } else {
       // Live Production API Server
       selected = _productionUrl;
@@ -171,6 +173,19 @@ class ApiConfig {
   static String forwardMessage(int messageId) =>
       "$baseUrl/message/$messageId/forward";
   static String pinMessage(int messageId) => "$baseUrl/message/$messageId/pin";
+
+  // ── Community module endpoints (PRD Section 18.3) ────────────
+  static String get communities => "$baseUrl/communities";
+  static String community(int id) => "$baseUrl/communities/$id";
+  static String get myCommunities => "$baseUrl/communities/my";
+  static String get suggestedCommunities => "$baseUrl/communities/suggested";
+  static String get communityCategories => "$baseUrl/communities/categories";
+  static String joinCommunity(int id) => "$baseUrl/communities/$id/join";
+  static String leaveCommunity(int id) => "$baseUrl/communities/$id/leave";
+  static String communityMembers(int id) => "$baseUrl/communities/$id/members";
+  static String communityFeed(int id) => "$baseUrl/communities/$id/feed";
+  static String communityPolls(int id) => "$baseUrl/communities/$id/polls";
+  static String voteCommunityPoll(int pollId) => "$baseUrl/communities/polls/$pollId/vote";
 
   // ── Socket.IO base URL (no /api/v1 path) ────────────────────
   static String get socketUrl {

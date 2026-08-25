@@ -23,6 +23,8 @@ class SocketService {
   final List<MessageEventCallback> _messageEditedListeners = [];
   final List<MessageEventCallback> _messageDeletedListeners = [];
   final List<MessageEventCallback> _messagePinnedListeners = [];
+  final List<MessageEventCallback> _messageDeliveredListeners = [];
+  final List<MessageEventCallback> _messageReadListeners = [];
   final List<TypingCallback> _typingListeners = [];
   final List<PresenceCallback> _presenceListeners = [];
   final Set<int> _joinedChatIds = {};
@@ -65,6 +67,10 @@ class SocketService {
       // Silently handle — app works in degraded mode without socket
     });
 
+    _socket!.onError((err) {
+      _isConnected = false;
+    });
+
     // ── Real-time message received ───────────────────────────────
     _socket!.on('chat:message', (data) {
       if (data is Map) {
@@ -83,6 +89,12 @@ class SocketService {
     });
     _socket!.on('message:pinned', (data) {
       _dispatchMessageEvent(data, _messagePinnedListeners);
+    });
+    _socket!.on('message:delivered', (data) {
+      _dispatchMessageEvent(data, _messageDeliveredListeners);
+    });
+    _socket!.on('message:read', (data) {
+      _dispatchMessageEvent(data, _messageReadListeners);
     });
 
     // ── Typing indicator ─────────────────────────────────────────
@@ -178,6 +190,36 @@ class SocketService {
 
   void removeMessagePinnedListener(MessageEventCallback cb) {
     _messagePinnedListeners.remove(cb);
+  }
+
+  void addMessageDeliveredListener(MessageEventCallback cb) {
+    if (!_messageDeliveredListeners.contains(cb)) {
+      _messageDeliveredListeners.add(cb);
+    }
+  }
+
+  void removeMessageDeliveredListener(MessageEventCallback cb) {
+    _messageDeliveredListeners.remove(cb);
+  }
+
+  void addMessageReadListener(MessageEventCallback cb) {
+    if (!_messageReadListeners.contains(cb)) {
+      _messageReadListeners.add(cb);
+    }
+  }
+
+  void removeMessageReadListener(MessageEventCallback cb) {
+    _messageReadListeners.remove(cb);
+  }
+
+  /// Emit message:delivered
+  void emitMessageDelivered(int messageId, int chatId) {
+    _socket?.emit('message:delivered', {'messageId': messageId, 'chatId': chatId});
+  }
+
+  /// Emit message:read
+  void emitMessageRead(int messageId, int chatId) {
+    _socket?.emit('message:read', {'messageId': messageId, 'chatId': chatId});
   }
 
   void addTypingListener(TypingCallback cb) {

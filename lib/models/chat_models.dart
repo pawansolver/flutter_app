@@ -317,6 +317,8 @@ class MessageModel {
     required this.isForwarded,
     required this.isEdited,
     this.isPinned = false,
+    this.isDelivered = false,
+    this.isRead = false,
     required this.createdAt,
     this.reactions,
     this.idempotencyKey,
@@ -334,6 +336,8 @@ class MessageModel {
   final bool isForwarded;
   final bool isEdited;
   final bool isPinned;
+  final bool isDelivered;
+  final bool isRead;
   final DateTime createdAt;
   final Map<String, dynamic>? reactions;
   final String? idempotencyKey;
@@ -365,6 +369,19 @@ class MessageModel {
       isForwarded: json['is_forwarded'] == true || json['isForwarded'] == true,
       isEdited: json['is_edited'] == true || json['isEdited'] == true,
       isPinned: json['is_pinned'] == true || json['isPinned'] == true,
+      isDelivered:
+          json['is_delivered'] == true ||
+          json['isDelivered'] == true ||
+          json['delivered_at'] != null ||
+          json['deliveredAt'] != null ||
+          json['receiptStatus'] == 'delivered' ||
+          json['receiptStatus'] == 'read',
+      isRead:
+          json['is_read'] == true ||
+          json['isRead'] == true ||
+          json['read_at'] != null ||
+          json['readAt'] != null ||
+          json['receiptStatus'] == 'read',
       createdAt:
           DateTime.tryParse(
             _safeString(json['created_at'] ?? json['createdAt']) ?? '',
@@ -391,6 +408,8 @@ class MessageModel {
     String? messageType,
     bool? isEdited,
     bool? isPinned,
+    bool? isDelivered,
+    bool? isRead,
   }) {
     return MessageModel(
       id: id,
@@ -405,6 +424,8 @@ class MessageModel {
       isForwarded: isForwarded,
       isEdited: isEdited ?? this.isEdited,
       isPinned: isPinned ?? this.isPinned,
+      isDelivered: isDelivered ?? this.isDelivered,
+      isRead: isRead ?? this.isRead,
       createdAt: createdAt,
       reactions: reactions,
       idempotencyKey: idempotencyKey,
