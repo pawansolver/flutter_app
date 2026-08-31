@@ -27,7 +27,7 @@ class CommunityCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -51,7 +51,7 @@ class CommunityCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: primaryOrange.withOpacity(0.08),
+                        color: primaryOrange.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -111,7 +111,7 @@ class CommunityCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: const Color(0xFFFFF5EE),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: primaryOrange.withOpacity(0.2)),
+                        border: Border.all(color: primaryOrange.withValues(alpha: 0.2)),
                       ),
                       child: Center(
                         child: community.iconUrl != null && community.iconUrl!.isNotEmpty
@@ -122,7 +122,7 @@ class CommunityCard extends StatelessWidget {
                                   width: 52,
                                   height: 52,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const Icon(
+                                  errorBuilder: (_, _, _) => const Icon(
                                     Icons.group_work_rounded,
                                     color: primaryOrange,
                                     size: 28,
@@ -182,7 +182,7 @@ class CommunityCard extends StatelessWidget {
                             widthFactor: 0.65,
                             child: CircleAvatar(
                               radius: 12,
-                              backgroundColor: Colors.primaries[(community.id + index) % Colors.primaries.length].withOpacity(0.2),
+                              backgroundColor: Colors.primaries[(community.id + index) % Colors.primaries.length].withValues(alpha: 0.2),
                               child: Icon(
                                 Icons.person,
                                 size: 14,

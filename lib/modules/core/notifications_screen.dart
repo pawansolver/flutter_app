@@ -2,6 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../services/auth_service.dart';
+import '../../services/community_service.dart';
+import '../chat/chat_window_screen.dart';
+import '../community/community_detail_screen.dart';
 import 'notification_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -124,7 +128,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   /// Tap: mark single notification as read (optimistic update).
   Future<void> _onTapNotification(AppNotification notif) async {
     // Deep-link routing based on payload data
-    _handleDeepLink(notif);
+    await _handleDeepLink(notif);
 
     if (notif.isRead) return;
     final index = _all.indexWhere((n) => n.id == notif.id);
@@ -207,18 +211,24 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Clear Read Notifications',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Clear Read Notifications',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         content: Text(
-            'Delete ${readIds.length} read notification${readIds.length > 1 ? 's' : ''}? This cannot be undone.'),
+          'Delete ${readIds.length} read notification${readIds.length > 1 ? 's' : ''}? This cannot be undone.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child:
-                const Text('Clear', style: TextStyle(color: Colors.redAccent)),
+            child: const Text(
+              'Clear',
+              style: TextStyle(color: Colors.redAccent),
+            ),
           ),
         ],
       ),
@@ -237,11 +247,49 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         _all.removeWhere((n) => n.isRead);
         _isClearingRead = false;
       });
-      _showSnack('Cleared ${result.data} notification${(result.data ?? 0) > 1 ? 's' : ''}.',
-          isSuccess: true);
+      _showSnack(
+        'Cleared ${result.data} notification${(result.data ?? 0) > 1 ? 's' : ''}.',
+        isSuccess: true,
+      );
     } else {
       setState(() => _isClearingRead = false);
       _showSnack(result.error ?? 'Failed to clear notifications.');
+    }
+  }
+
+  Future<void> _respondToCommunityInvitation(
+    AppNotification notification,
+    String action,
+  ) async {
+    final communityId = int.tryParse(
+      notification.data?['communityId']?.toString() ?? '',
+    );
+    final invitationId = int.tryParse(
+      notification.data?['invitationId']?.toString() ?? '',
+    );
+    if (communityId == null || invitationId == null) {
+      _showSnack('This invitation is missing required details.');
+      return;
+    }
+    try {
+      await CommunityService().respondToInvitation(
+        communityId,
+        invitationId,
+        action,
+      );
+      if (!mounted) return;
+      await _service.markRead(notification.id);
+      if (!mounted) return;
+      setState(() {
+        _all.removeWhere((item) => item.id == notification.id);
+        if (!notification.isRead && _unreadCount > 0) _unreadCount -= 1;
+      });
+      _showSnack(
+        action == 'accept' ? 'Invitation accepted.' : 'Invitation declined.',
+        isSuccess: true,
+      );
+    } catch (error) {
+      _showSnack(error.toString());
     }
   }
 
@@ -249,7 +297,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   /// Inspects `notification.data` and navigates to the relevant screen.
   /// Enterprise pattern: all notification types have a `target` key.
-  void _handleDeepLink(AppNotification notif) {
+  Future<void> _handleDeepLink(AppNotification notif) async {
     final target = notif.deepLinkTarget;
     if (target == null) return;
 
@@ -275,12 +323,40 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         }
         break;
       case 'chat':
-        final chatId = data['chatId'];
-        if (chatId != null) {
-          _showSnack('Opening chat…', isSuccess: true);
-          // Navigator.push(context, MaterialPageRoute(
-          //   builder: (_) => ChatDetailScreen(chatId: chatId),
-          // ));
+        final chatId = int.tryParse(data['chatId']?.toString() ?? '');
+        if (chatId != null && chatId > 0) {
+          final userId = await AuthService().getUserId();
+          if (!mounted) return;
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ChatWindowScreen(
+                chatId: chatId,
+                chatName: data['chatName']?.toString() ?? 'Chat',
+                currentUserId: userId ?? 0,
+                isOnline: false,
+              ),
+            ),
+          );
+        }
+        break;
+      case 'community':
+        final communityId = int.tryParse(data['communityId']?.toString() ?? '');
+        if (communityId != null && communityId > 0) {
+          try {
+            final community = await CommunityService().getCommunityDetails(
+              communityId,
+            );
+            if (!mounted) return;
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CommunityDetailScreen(community: community),
+              ),
+            );
+          } catch (error) {
+            _showSnack(error.toString());
+          }
         }
         break;
       default:
@@ -310,7 +386,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       case 'reminder':
         return (icon: Icons.event_note_outlined, color: Colors.blueGrey);
       case 'message':
-        return (icon: Icons.chat_bubble_outline, color: const Color(0xFF3B82F6));
+        return (
+          icon: Icons.chat_bubble_outline,
+          color: const Color(0xFF3B82F6),
+        );
       case 'system':
         return (icon: Icons.settings_suggest_outlined, color: Colors.grey);
       case 'like':
@@ -380,9 +459,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
               child: Text(
                 '$_unreadCount',
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold),
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
@@ -395,25 +475,30 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             padding: EdgeInsets.only(right: 8),
             child: Center(
               child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2)),
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             ),
           )
         else if (_unreadCount > 0)
           TextButton(
             onPressed: _markAllRead,
-            child: const Text('Mark all read',
-                style: TextStyle(
-                    color: _orange,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13)),
+            child: const Text(
+              'Mark all read',
+              style: TextStyle(
+                color: _orange,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
           ),
         // 3-dot overflow menu
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert, color: _dark),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           onSelected: (value) {
             if (value == 'clear_read') _clearReadNotifications();
           },
@@ -421,17 +506,22 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             PopupMenuItem(
               value: 'clear_read',
               enabled: readCount > 0,
-              child: Row(children: [
-                Icon(Icons.delete_sweep_outlined,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.delete_sweep_outlined,
                     size: 20,
-                    color: readCount > 0 ? Colors.redAccent : Colors.grey),
-                const SizedBox(width: 10),
-                Text(
-                  'Clear read ($readCount)',
-                  style: TextStyle(
-                      color: readCount > 0 ? Colors.redAccent : Colors.grey),
-                ),
-              ]),
+                    color: readCount > 0 ? Colors.redAccent : Colors.grey,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Clear read ($readCount)',
+                    style: TextStyle(
+                      color: readCount > 0 ? Colors.redAccent : Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -454,10 +544,11 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         unselectedLabelColor: _grey,
         indicatorColor: _orange,
         indicatorWeight: 2.5,
-        labelStyle:
-            const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-        unselectedLabelStyle:
-            const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+        labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        unselectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 13,
+        ),
         tabs: _tabs.map((t) {
           // Badge for Unread tab
           if (t == NotificationCategory.unread && _unreadCount > 0) {
@@ -468,16 +559,22 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                   Text(t.label),
                   const SizedBox(width: 5),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 1,
+                    ),
                     decoration: BoxDecoration(
-                        color: _orange,
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Text('$_unreadCount',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold)),
+                      color: _orange,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$_unreadCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -491,8 +588,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-          child: CircularProgressIndicator(color: _green));
+      return const Center(child: CircularProgressIndicator(color: _green));
     }
 
     if (_error != null) {
@@ -504,15 +600,19 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(_error!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: _grey)),
+              child: Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: _grey),
+              ),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadNotifications,
               style: ElevatedButton.styleFrom(
-                  backgroundColor: _green, foregroundColor: Colors.white),
+                backgroundColor: _green,
+                foregroundColor: Colors.white,
+              ),
               child: const Text('Retry'),
             ),
           ],
@@ -530,15 +630,21 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             const SizedBox(height: 100),
-            const Icon(Icons.notifications_off_outlined,
-                size: 56, color: Colors.grey),
+            const Icon(
+              Icons.notifications_off_outlined,
+              size: 56,
+              color: Colors.grey,
+            ),
             const SizedBox(height: 16),
             const Center(
-              child: Text('You\'re all caught up',
-                  style: TextStyle(
-                      color: _dark,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600)),
+              child: Text(
+                'You\'re all caught up',
+                style: TextStyle(
+                  color: _dark,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
             const SizedBox(height: 6),
             Center(
@@ -560,8 +666,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: visible.length,
-        separatorBuilder: (_, idx) =>
-            const Divider(height: 1, color: _divider),
+        separatorBuilder: (_, idx) => const Divider(height: 1, color: _divider),
         itemBuilder: (context, index) => _buildNotificationTile(visible[index]),
       ),
     );
@@ -581,11 +686,14 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           children: const [
             Icon(Icons.delete_outline, color: Colors.white, size: 22),
             SizedBox(height: 4),
-            Text('Delete',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600)),
+            Text(
+              'Delete',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
       ),
@@ -597,9 +705,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       child: InkWell(
         onTap: () => _onTapNotification(notif),
         child: Container(
-          color: notif.isRead
-              ? Colors.white
-              : _orange.withValues(alpha: 0.05),
+          color: notif.isRead ? Colors.white : _orange.withValues(alpha: 0.05),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -622,8 +728,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                         style: TextStyle(
                           color: _dark,
                           fontSize: 14,
-                          fontWeight:
-                              notif.isRead ? FontWeight.w600 : FontWeight.bold,
+                          fontWeight: notif.isRead
+                              ? FontWeight.w600
+                              : FontWeight.bold,
                           height: 1.3,
                         ),
                       ),
@@ -659,7 +766,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 1),
+                              horizontal: 6,
+                              vertical: 1,
+                            ),
                             decoration: BoxDecoration(
                               color: _green.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
@@ -667,14 +776,37 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                             child: Text(
                               'Tap to open',
                               style: TextStyle(
-                                  color: _green,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600),
+                                color: _green,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
                       ],
                     ),
+                    if (notif.data?['invitationId'] != null) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          OutlinedButton(
+                            onPressed: () => _respondToCommunityInvitation(
+                              notif,
+                              'decline',
+                            ),
+                            child: const Text('Decline'),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton(
+                            onPressed: () => _respondToCommunityInvitation(
+                              notif,
+                              'accept',
+                            ),
+                            child: const Text('Accept'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -685,7 +817,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                   width: 9,
                   height: 9,
                   decoration: const BoxDecoration(
-                      color: _orange, shape: BoxShape.circle),
+                    color: _orange,
+                    shape: BoxShape.circle,
+                  ),
                 ),
             ],
           ),

@@ -8,6 +8,8 @@ import '../core/api_config.dart';
 import '../models/community_models.dart';
 import 'authenticated_dio.dart';
 
+typedef CommunityTokenProvider = Future<String?> Function();
+
 class CommunityServiceException implements Exception {
   final String message;
   final int? statusCode;
@@ -21,19 +23,28 @@ class CommunityServiceException implements Exception {
 class CommunityService {
   static final CommunityService _instance = CommunityService._internal();
   factory CommunityService() => _instance;
-  CommunityService._internal() : _dio = AuthenticatedDio().dio;
+  CommunityService._internal()
+    : _dio = AuthenticatedDio().dio,
+      _tokenProvider = _readStoredToken;
+  CommunityService.forTesting(
+    this._dio, {
+    required this._tokenProvider,
+  });
 
   final Dio _dio;
+  final CommunityTokenProvider _tokenProvider;
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
+  static Future<String?> _readStoredToken() => _storage.read(key: 'jwt_token');
 
-  Future<Options> _authOptions() async {
-    final token = await _storage.read(key: 'jwt_token');
+  Future<Options> _authOptions({bool optional = false}) async {
+    final token = await _tokenProvider();
     if (token == null || token.trim().isEmpty) {
+      if (optional) {
+        return Options();
+      }
       throw const CommunityServiceException('Authentication required.');
     }
-    return Options(
-      headers: {'Authorization': 'Bearer ${token.trim()}'},
-    );
+    return Options(headers: {'Authorization': 'Bearer ${token.trim()}'});
   }
 
   /// Get communities joined by current user
@@ -46,13 +57,7 @@ class CommunityService {
       final list = _unwrapList(response.data);
       return list.map((item) => CommunityModel.fromJson(item)).toList();
     } on DioException catch (e) {
-      // Return dummy fallbacks if server offline during local dev
-      if (kDebugMode && _isConnectionError(e)) {
-        return _mockMyCommunities();
-      }
       throw _mapDioException(e, 'Failed to fetch your communities');
-    } catch (_) {
-      return _mockMyCommunities();
     }
   }
 
@@ -63,23 +68,24 @@ class CommunityService {
   }) async {
     try {
       final queryParams = <String, dynamic>{};
-      if (categoryId != null && categoryId > 0) queryParams['categoryId'] = categoryId;
-      if (search != null && search.trim().isNotEmpty) queryParams['search'] = search.trim();
+      if (categoryId != null && categoryId > 0) {
+        queryParams['category_id'] = categoryId;
+      }
+      if (search != null && search.trim().isNotEmpty) {
+        queryParams['search'] = search.trim();
+      }
 
       final response = await _dio.get(
-        ApiConfig.suggestedCommunities,
+        search != null && search.trim().isNotEmpty
+            ? ApiConfig.communities
+            : ApiConfig.suggestedCommunities,
         queryParameters: queryParams,
-        options: await _authOptions(),
+        options: await _authOptions(optional: true),
       );
       final list = _unwrapList(response.data);
       return list.map((item) => CommunityModel.fromJson(item)).toList();
     } on DioException catch (e) {
-      if (kDebugMode && _isConnectionError(e)) {
-        return _mockSuggestedCommunities(categoryId: categoryId, search: search);
-      }
       throw _mapDioException(e, 'Failed to discover communities');
-    } catch (_) {
-      return _mockSuggestedCommunities(categoryId: categoryId, search: search);
     }
   }
 
@@ -88,17 +94,10 @@ class CommunityService {
     try {
       final response = await _dio.get(
         ApiConfig.community(id),
-        options: await _authOptions(),
+        options: await _authOptions(optional: true),
       );
       return CommunityModel.fromJson(_unwrapObject(response.data));
     } on DioException catch (e) {
-      if (kDebugMode && _isConnectionError(e)) {
-        final mock = _mockSuggestedCommunities().firstWhere(
-          (c) => c.id == id,
-          orElse: () => _mockMyCommunities().firstWhere((c) => c.id == id),
-        );
-        return mock;
-      }
       throw _mapDioException(e, 'Failed to load community details');
     }
   }
@@ -115,7 +114,9 @@ class CommunityService {
   }) async {
     try {
       final map = <String, dynamic>{
+        'communityName': name.trim(),
         'name': name.trim(),
+        'communityDescription': description.trim(),
         'description': description.trim(),
         'is_private': isPrivate,
         if (categoryId != null) 'category_id': categoryId,
@@ -144,36 +145,28 @@ class CommunityService {
       );
       return CommunityModel.fromJson(_unwrapObject(response.data));
     } on DioException catch (e) {
-      if (kDebugMode && _isConnectionError(e)) {
-        // Return local representation
-        return CommunityModel(
-          id: DateTime.now().millisecondsSinceEpoch % 10000,
-          name: name,
-          description: description,
-          category: 'General',
-          categoryId: categoryId,
-          isPrivate: isPrivate,
-          membersCount: 1,
-          postsCount: 0,
-          isMember: true,
-          myRole: CommunityRole.admin,
-          createdAt: DateTime.now(),
-        );
-      }
       throw _mapDioException(e, 'Failed to create community');
     }
   }
 
   /// Join a community
-  Future<bool> joinCommunity(int communityId) async {
+  Future<CommunityJoinResult> joinCommunity(
+    int communityId, {
+    String? note,
+  }) async {
     try {
       final response = await _dio.post(
         ApiConfig.joinCommunity(communityId),
+        data: {if (note != null && note.trim().isNotEmpty) 'note': note.trim()},
         options: await _authOptions(),
       );
-      return response.statusCode == 200 || response.statusCode == 201;
+      final data = _unwrapObject(response.data);
+      return CommunityJoinResult(
+        status: data['isPending'] == true
+            ? CommunityJoinStatus.pending
+            : CommunityJoinStatus.member,
+      );
     } on DioException catch (e) {
-      if (kDebugMode && _isConnectionError(e)) return true;
       throw _mapDioException(e, 'Failed to join community');
     }
   }
@@ -187,130 +180,719 @@ class CommunityService {
       );
       return response.statusCode == 200 || response.statusCode == 204;
     } on DioException catch (e) {
-      if (kDebugMode && _isConnectionError(e)) return true;
       throw _mapDioException(e, 'Failed to leave community');
     }
   }
 
   /// Get members list
-  Future<List<CommunityMemberModel>> getCommunityMembers(int communityId) async {
+  Future<List<CommunityMemberModel>> getCommunityMembers(
+    int communityId,
+  ) async {
     try {
       final response = await _dio.get(
         ApiConfig.communityMembers(communityId),
-        options: await _authOptions(),
+        options: await _authOptions(optional: true),
       );
       final list = _unwrapList(response.data);
       return list.map((item) => CommunityMemberModel.fromJson(item)).toList();
     } on DioException catch (e) {
-      if (kDebugMode && _isConnectionError(e)) {
-        return _mockMembers();
-      }
       throw _mapDioException(e, 'Failed to load community members');
-    } catch (_) {
-      return _mockMembers();
     }
   }
 
   /// Get Community Scoped Feed Posts
-  Future<List<CommunityPostModel>> getCommunityFeed(int communityId, {String? cursor, int limit = 20}) async {
+  Future<CommunityFeedPage> getCommunityFeedPage(
+    int communityId, {
+    String? cursor,
+    int limit = 20,
+  }) async {
     try {
       final response = await _dio.get(
         ApiConfig.communityFeed(communityId),
-        queryParameters: {
-          'limit': limit,
-          if (cursor != null) 'cursor': cursor,
-        },
-        options: await _authOptions(),
+        queryParameters: {'limit': limit, if (cursor != null) 'cursor': cursor},
+        options: await _authOptions(optional: true),
       );
-      final list = _unwrapList(response.data);
-      return list.map((item) => CommunityPostModel.fromJson(item)).toList();
+      final data = _unwrapObject(response.data);
+      final rawPosts = data['posts'] ?? data['timeline'];
+      final posts = rawPosts is List
+          ? rawPosts
+                .whereType<Map>()
+                .map(
+                  (item) => CommunityPostModel.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList()
+          : <CommunityPostModel>[];
+      return CommunityFeedPage(
+        posts: posts,
+        nextCursor: data['nextCursor']?.toString(),
+        hasMore: data['hasMore'] == true,
+      );
     } on DioException catch (e) {
-      if (kDebugMode && _isConnectionError(e)) {
-        return _mockPosts(communityId);
-      }
       throw _mapDioException(e, 'Failed to load community feed');
-    } catch (_) {
-      return _mockPosts(communityId);
     }
   }
+
+  Future<List<CommunityPostModel>> getCommunityFeed(
+    int communityId, {
+    String? cursor,
+    int limit = 20,
+  }) async => (await getCommunityFeedPage(
+    communityId,
+    cursor: cursor,
+    limit: limit,
+  )).posts;
 
   /// Create a post inside community
   Future<CommunityPostModel> createCommunityPost(
     int communityId, {
     required String content,
-    List<String> mediaUrls = const [],
+    List<int> mediaIds = const [],
+    String type = 'text',
   }) async {
     try {
       final response = await _dio.post(
         ApiConfig.communityFeed(communityId),
-        data: {
-          'content': content,
-          'media_urls': mediaUrls,
-        },
+        data: {'content': content, 'mediaIds': mediaIds, 'type': type},
         options: await _authOptions(),
       );
       return CommunityPostModel.fromJson(_unwrapObject(response.data));
     } on DioException catch (e) {
-      if (kDebugMode && _isConnectionError(e)) {
-        return CommunityPostModel(
-          id: DateTime.now().millisecondsSinceEpoch % 10000,
-          communityId: communityId,
-          authorId: 1,
-          authorName: 'You',
-          content: content,
-          mediaUrls: mediaUrls,
-          createdAt: DateTime.now(),
-        );
-      }
-      throw _mapDioException(e, 'Failed to publish post to community');
+      throw _mapDioException(e, 'Failed to publish post');
     }
   }
 
-  /// Get community polls
+  /// Get Community Polls
   Future<List<CommunityPollModel>> getCommunityPolls(int communityId) async {
     try {
       final response = await _dio.get(
         ApiConfig.communityPolls(communityId),
-        options: await _authOptions(),
+        options: await _authOptions(optional: true),
       );
       final list = _unwrapList(response.data);
       return list.map((item) => CommunityPollModel.fromJson(item)).toList();
     } on DioException catch (e) {
-      if (kDebugMode && _isConnectionError(e)) {
-        return _mockPolls(communityId);
-      }
       throw _mapDioException(e, 'Failed to load polls');
-    } catch (_) {
-      return _mockPolls(communityId);
     }
   }
 
-  /// Vote on a poll option
-  Future<bool> votePoll(int pollId, int optionId) async {
+  /// Create a new Poll in Community
+  Future<CommunityPollModel> createPoll(
+    int communityId, {
+    required String question,
+    required List<String> options,
+    int durationDays = 3,
+  }) async {
     try {
       final response = await _dio.post(
-        ApiConfig.voteCommunityPoll(pollId),
-        data: {'option_id': optionId},
+        ApiConfig.communityPolls(communityId),
+        data: {
+          'question': question,
+          'options': options,
+          'expiresAt': DateTime.now()
+              .add(Duration(days: durationDays))
+              .toIso8601String(),
+        },
+        options: await _authOptions(),
+      );
+      return CommunityPollModel.fromJson(_unwrapObject(response.data));
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to create poll');
+    }
+  }
+
+  /// Vote on a poll option (Atomic Row-Locking backend)
+  Future<bool> votePoll(int communityId, int pollId, int optionId) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.voteCommunityPoll(communityId, pollId),
+        data: {'optionId': optionId},
         options: await _authOptions(),
       );
       return response.statusCode == 200 || response.statusCode == 201;
     } on DioException catch (e) {
-      if (kDebugMode && _isConnectionError(e)) return true;
       throw _mapDioException(e, 'Failed to register vote');
     }
   }
 
-  /// Get list of categories
+  /// Delete a community poll (by Creator / Admin)
+  Future<bool> deletePoll(int communityId, int pollId) async {
+    try {
+      final response = await _dio.delete(
+        ApiConfig.communityPoll(communityId, pollId),
+        options: await _authOptions(),
+      );
+      return response.statusCode == 200 || response.statusCode == 204;
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to delete poll');
+    }
+  }
+
+  /// Get list of categories from backend
   Future<List<CommunityCategoryModel>> getCategories() async {
     try {
       final response = await _dio.get(
         ApiConfig.communityCategories,
+        options: await _authOptions(optional: true),
+      );
+      final list = _unwrapList(response.data);
+      if (list.isNotEmpty) {
+        final parsed = list
+            .map((item) => CommunityCategoryModel.fromJson(item))
+            .toList();
+        // Add "All" option if not present
+        if (!parsed.any((c) => c.name.toLowerCase() == 'all')) {
+          return [
+            const CommunityCategoryModel(
+              id: 0,
+              name: 'All',
+              icon: '🌟',
+              slug: 'all',
+            ),
+            ...parsed,
+          ];
+        }
+        return parsed;
+      }
+      return const [
+        CommunityCategoryModel(id: 0, name: 'All', icon: '🌟', slug: 'all'),
+      ];
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to load community categories');
+    }
+  }
+
+  // ── Advanced PRD Sub-Feature APIs ──────────────────────────────
+
+  /// Get pending join requests for a private community (Admin/Mod only)
+  Future<List<CommunityJoinRequestModel>> getPendingJoinRequests(
+    int communityId,
+  ) async {
+    try {
+      final response = await _dio.get(
+        ApiConfig.communityJoinRequests(communityId),
         options: await _authOptions(),
       );
       final list = _unwrapList(response.data);
-      return list.map((item) => CommunityCategoryModel.fromJson(item)).toList();
-    } catch (_) {
-      return _defaultCategories();
+      return list
+          .map((item) => CommunityJoinRequestModel.fromJson(item))
+          .toList();
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to load join requests');
+    }
+  }
+
+  /// Approve a pending join request
+  Future<bool> approveJoinRequest(int communityId, int requestId) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.approveJoinRequest(communityId, requestId),
+        options: await _authOptions(),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to approve join request');
+    }
+  }
+
+  /// Reject a pending join request
+  Future<bool> rejectJoinRequest(int communityId, int requestId) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.rejectJoinRequest(communityId, requestId),
+        options: await _authOptions(),
+      );
+      return response.statusCode == 200 || response.statusCode == 204;
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to reject join request');
+    }
+  }
+
+  /// Update a member's role (Admin -> Moderator / Member)
+  Future<bool> updateMemberRole(
+    int communityId,
+    int memberId,
+    CommunityRole role,
+  ) async {
+    try {
+      final response = await _dio.put(
+        ApiConfig.communityMemberRole(communityId, memberId),
+        data: {'role': role.name},
+        options: await _authOptions(),
+      );
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to update member role');
+    }
+  }
+
+  /// Remove or Ban a member from the community
+  Future<bool> removeMember(
+    int communityId,
+    int memberId, {
+    bool isBanned = false,
+  }) async {
+    try {
+      if (isBanned) {
+        final response = await _dio.post(
+          ApiConfig.banCommunityMember(communityId, memberId),
+          options: await _authOptions(),
+        );
+        return response.statusCode == 200;
+      } else {
+        final response = await _dio.delete(
+          ApiConfig.communityMember(communityId, memberId),
+          options: await _authOptions(),
+        );
+        return response.statusCode == 200 || response.statusCode == 204;
+      }
+    } on DioException catch (e) {
+      throw _mapDioException(
+        e,
+        isBanned ? 'Failed to ban member' : 'Failed to remove member',
+      );
+    }
+  }
+
+  Future<bool> unbanMember(int communityId, int userId) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.unbanCommunityMember(communityId, userId),
+        options: await _authOptions(),
+      );
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to unban member');
+    }
+  }
+
+  /// Get pinned announcements
+  Future<List<CommunityAnnouncementModel>> getCommunityAnnouncements(
+    int communityId,
+  ) async {
+    try {
+      final response = await _dio.get(
+        ApiConfig.communityAnnouncements(communityId),
+        options: await _authOptions(optional: true),
+      );
+      final list = _unwrapList(response.data);
+      return list
+          .map((item) => CommunityAnnouncementModel.fromJson(item))
+          .toList();
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to load announcements');
+    }
+  }
+
+  /// Create a new official announcement (Admin only)
+  Future<CommunityAnnouncementModel> createAnnouncement(
+    int communityId,
+    String title,
+    String message,
+  ) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.communityAnnouncements(communityId),
+        data: {'title': title, 'message': message},
+        options: await _authOptions(),
+      );
+      return CommunityAnnouncementModel.fromJson(_unwrapObject(response.data));
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to publish announcement');
+    }
+  }
+
+  /// Get Community Documents (PDFs, bylaws, guidelines)
+  Future<List<CommunityDocumentModel>> getCommunityDocuments(
+    int communityId,
+  ) async {
+    try {
+      final response = await _dio.get(
+        ApiConfig.communityDocuments(communityId),
+        options: await _authOptions(optional: true),
+      );
+      final list = _unwrapList(response.data);
+      return list.map((item) => CommunityDocumentModel.fromJson(item)).toList();
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to load documents');
+    }
+  }
+
+  /// Upload a Community Document - bytes-based (works on ALL platforms incl. Web)
+  /// Enterprise fix: MultipartFile.fromFile(path) fails on Flutter Web.
+  /// Use MultipartFile.fromBytes() which is platform-agnostic.
+  Future<CommunityDocumentModel> uploadDocumentBytes(
+    int communityId, {
+    required String title,
+    required List<int> fileBytes,
+    required String fileName,
+    String fileType = 'pdf',
+    String fileSize = '0 MB',
+  }) async {
+    try {
+      final form = FormData.fromMap({
+        'title': title,
+        'fileType': fileType,
+        'fileSize': fileSize,
+        'file': MultipartFile.fromBytes(
+          fileBytes,
+          filename: fileName,
+        ),
+      });
+      final response = await _dio.post(
+        ApiConfig.communityDocuments(communityId),
+        data: form,
+        options: await _authOptions(),
+      );
+      return CommunityDocumentModel.fromJson(_unwrapObject(response.data));
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to upload document');
+    }
+  }
+
+  /// [Deprecated] Use uploadDocumentBytes for web compatibility.
+  @Deprecated('Use uploadDocumentBytes instead - supports all platforms including web')
+  Future<CommunityDocumentModel> uploadDocument(
+    int communityId, {
+    required String title,
+    required String filePath,
+    String fileType = 'pdf',
+    String fileSize = '1.2 MB',
+  }) async {
+    try {
+      final form = FormData.fromMap({
+        'title': title,
+        'fileType': fileType,
+        'fileSize': fileSize,
+        'file': await MultipartFile.fromFile(filePath),
+      });
+      final response = await _dio.post(
+        ApiConfig.communityDocuments(communityId),
+        data: form,
+        options: await _authOptions(),
+      );
+      return CommunityDocumentModel.fromJson(_unwrapObject(response.data));
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to upload document');
+    }
+  }
+
+  /// Get Community Photo/Video Gallery
+  Future<List<CommunityMediaModel>> getCommunityGallery(int communityId) async {
+    try {
+      final response = await _dio.get(
+        ApiConfig.communityGallery(communityId),
+        options: await _authOptions(optional: true),
+      );
+      final list = _unwrapList(response.data);
+      return list.map((item) => CommunityMediaModel.fromJson(item)).toList();
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to load gallery');
+    }
+  }
+
+  /// Upload Community Gallery Media - bytes-based (works on ALL platforms incl. Web)
+  /// Enterprise fix: XFile.path on Flutter Web returns a blob URL, not a real path.
+  /// MultipartFile.fromFile() throws "MultipartFile is only supported where dart:io
+  /// is available." on web. Use fromBytes() instead.
+  Future<CommunityMediaModel> uploadMediaBytes(
+    int communityId, {
+    required List<int> fileBytes,
+    required String fileName,
+    String? caption,
+    String mediaType = 'image',
+  }) async {
+    try {
+      final form = FormData.fromMap({
+        'mediaType': mediaType,
+        if (caption != null && caption.isNotEmpty) 'caption': caption,
+        'media': MultipartFile.fromBytes(
+          fileBytes,
+          filename: fileName,
+        ),
+      });
+      final response = await _dio.post(
+        ApiConfig.communityGallery(communityId),
+        data: form,
+        options: await _authOptions(),
+      );
+      return CommunityMediaModel.fromJson(_unwrapObject(response.data));
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to upload media');
+    }
+  }
+
+  /// [Deprecated] Use uploadMediaBytes for web compatibility.
+  @Deprecated('Use uploadMediaBytes instead - supports all platforms including web')
+  Future<CommunityMediaModel> uploadMedia(
+    int communityId, {
+    required String filePath,
+    String? caption,
+    String mediaType = 'image',
+  }) async {
+    try {
+      final form = FormData.fromMap({
+        'mediaType': mediaType,
+        if (caption != null) 'caption': caption,
+        'media': await MultipartFile.fromFile(filePath),
+      });
+      final response = await _dio.post(
+        ApiConfig.communityGallery(communityId),
+        data: form,
+        options: await _authOptions(),
+      );
+      return CommunityMediaModel.fromJson(_unwrapObject(response.data));
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to upload media');
+    }
+  }
+
+  /// Delete a Community Document (by Admin / Moderator / Owner)
+  Future<bool> deleteDocument(int communityId, int documentId) async {
+    try {
+      final response = await _dio.delete(
+        ApiConfig.communityDocument(communityId, documentId),
+        options: await _authOptions(),
+      );
+      return response.statusCode == 200 || response.statusCode == 204;
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to delete document');
+    }
+  }
+
+  /// Delete a Community Gallery Media (by Admin / Moderator / Owner)
+  Future<bool> deleteMedia(int communityId, int mediaId) async {
+    try {
+      final response = await _dio.delete(
+        ApiConfig.communityGalleryMedia(communityId, mediaId),
+        options: await _authOptions(),
+      );
+      return response.statusCode == 200 || response.statusCode == 204;
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to delete media');
+    }
+  }
+
+  /// Update Community Settings / Info
+  Future<CommunityModel> updateCommunity(
+    int communityId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final payload = Map<String, dynamic>.from(data);
+      final coverPath = payload.remove('coverFilePath')?.toString();
+      dynamic requestData = payload;
+      if (coverPath != null && coverPath.isNotEmpty && !kIsWeb) {
+        payload['cover_image'] = await MultipartFile.fromFile(coverPath);
+        requestData = FormData.fromMap(payload);
+      }
+      final response = await _dio.put(
+        ApiConfig.community(communityId),
+        data: requestData,
+        options: await _authOptions(),
+      );
+      return CommunityModel.fromJson(_unwrapObject(response.data));
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to update community');
+    }
+  }
+
+  /// Delete Community (Creator/Admin only)
+  Future<bool> deleteCommunity(int communityId) async {
+    try {
+      final response = await _dio.delete(
+        ApiConfig.community(communityId),
+        options: await _authOptions(),
+      );
+      return response.statusCode == 200 || response.statusCode == 204;
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to delete community');
+    }
+  }
+
+  /// Get Community Events
+  Future<List<CommunityEventModel>> getCommunityEvents(int communityId) async {
+    try {
+      final response = await _dio.get(
+        ApiConfig.communityEvents(communityId),
+        options: await _authOptions(optional: true),
+      );
+      return _unwrapList(
+        response.data,
+      ).map(CommunityEventModel.fromJson).toList();
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to load events');
+    }
+  }
+
+  /// Create Community Event
+  Future<CommunityEventModel> createCommunityEvent(
+    int communityId, {
+    required String title,
+    String? description,
+    String? venue,
+    required DateTime date,
+  }) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.communityEvents(communityId),
+        data: {
+          'title': title,
+          'description': description,
+          'venue': venue,
+          'date': date.toUtc().toIso8601String(),
+        },
+        options: await _authOptions(),
+      );
+      return CommunityEventModel.fromJson(_unwrapObject(response.data));
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to create event');
+    }
+  }
+
+  Future<CommunityEventModel> rsvpCommunityEvent(
+    int communityId,
+    CommunityEventModel event,
+    String status,
+  ) async {
+    try {
+      final response = await _dio.put(
+        ApiConfig.communityEventRsvp(communityId, event.id),
+        data: {'status': status},
+        options: await _authOptions(),
+      );
+      final data = _unwrapObject(response.data);
+      return event.copyWith(
+        myRsvpStatus: data['status']?.toString(),
+        goingCount: _asInt(data['goingCount']),
+        interestedCount: _asInt(data['interestedCount']),
+      );
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to update RSVP');
+    }
+  }
+
+  Future<CommunityPage<CommunityInviteableUser>> getInviteableUsers(
+    int communityId, {
+    String? search,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    try {
+      final response = await _dio.get(
+        ApiConfig.communityInviteableUsers(communityId),
+        queryParameters: {
+          'page': page,
+          'limit': limit,
+          if (search != null && search.trim().isNotEmpty)
+            'search': search.trim(),
+        },
+        options: await _authOptions(),
+      );
+      final data = _unwrapObject(response.data);
+      final users = data['users'] is List
+          ? (data['users'] as List)
+                .whereType<Map>()
+                .map(
+                  (value) => CommunityInviteableUser.fromJson(
+                    Map<String, dynamic>.from(value),
+                  ),
+                )
+                .toList()
+          : <CommunityInviteableUser>[];
+      return CommunityPage(
+        items: users,
+        total: _asInt(data['total']),
+        page: _asInt(data['page'], fallback: page),
+        totalPages: _asInt(data['totalPages'], fallback: 1),
+      );
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to search inviteable users');
+    }
+  }
+
+  Future<int> sendInvitations(int communityId, List<int> userIds) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.communityInvitations(communityId),
+        data: {'userIds': userIds},
+        options: await _authOptions(),
+      );
+      return _asInt(_unwrapObject(response.data)['count']);
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to send invitations');
+    }
+  }
+
+  Future<CommunityPage<CommunityInvitationModel>> getMyInvitations({
+    int page = 1,
+    int limit = 20,
+    String status = 'pending',
+  }) async {
+    try {
+      final response = await _dio.get(
+        ApiConfig.myCommunityInvitations,
+        queryParameters: {'page': page, 'limit': limit, 'status': status},
+        options: await _authOptions(),
+      );
+      final data = _unwrapObject(response.data);
+      final invitations = data['invitations'] is List
+          ? (data['invitations'] as List)
+                .whereType<Map>()
+                .map(
+                  (value) => CommunityInvitationModel.fromJson(
+                    Map<String, dynamic>.from(value),
+                  ),
+                )
+                .toList()
+          : <CommunityInvitationModel>[];
+      return CommunityPage(
+        items: invitations,
+        total: _asInt(data['total']),
+        page: _asInt(data['page'], fallback: page),
+        totalPages: _asInt(data['totalPages'], fallback: 1),
+      );
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to load community invitations');
+    }
+  }
+
+  Future<CommunityInvitationModel> respondToInvitation(
+    int communityId,
+    int invitationId,
+    String action,
+  ) async {
+    if (action != 'accept' && action != 'decline') {
+      throw ArgumentError.value(action, 'action', 'Must be accept or decline');
+    }
+    try {
+      final response = await _dio.post(
+        ApiConfig.respondCommunityInvitation(communityId, invitationId),
+        data: {'action': action},
+        options: await _authOptions(),
+      );
+      return CommunityInvitationModel.fromJson(_unwrapObject(response.data));
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to respond to invitation');
+    }
+  }
+
+  Future<int> getCommunityChatId(int communityId) async {
+    try {
+      final response = await _dio.get(
+        ApiConfig.communityChat(communityId),
+        options: await _authOptions(),
+      );
+      final id = _asInt(_unwrapObject(response.data)['id']);
+      if (id <= 0) {
+        throw const CommunityServiceException(
+          'Community chat response did not contain a valid chat ID.',
+        );
+      }
+      return id;
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to open community chat');
     }
   }
 
@@ -318,11 +900,47 @@ class CommunityService {
 
   List<Map<String, dynamic>> _unwrapList(dynamic responseData) {
     dynamic payload = responseData;
+    // Handle { success, message, data: ... } wrapper
     if (payload is Map && payload['data'] != null) payload = payload['data'];
-    if (payload is List) {
-      return payload.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    // Handle double-wrapped { data: { data: [...] } }
+    if (payload is Map && payload['data'] != null && payload['data'] is List) {
+      payload = payload['data'];
     }
-    return [];
+    // Handle common list wrapper keys from backend
+    if (payload is Map) {
+      if (payload['communities'] is List) {
+        payload = payload['communities'];
+      } else if (payload['members'] is List) {
+        payload = payload['members'];
+      } else if (payload['requests'] is List) {
+        payload = payload['requests'];
+      } else if (payload['categories'] is List) {
+        payload = payload['categories'];
+      } else if (payload['rows'] is List) {
+        payload = payload['rows'];
+      } else if (payload['items'] is List) {
+        payload = payload['items'];
+      } else if (payload['polls'] is List) {
+        payload = payload['polls'];
+      } else if (payload['documents'] is List) {
+        payload = payload['documents'];
+      } else if (payload['gallery'] is List) {
+        payload = payload['gallery'];
+      } else if (payload['announcements'] is List) {
+        payload = payload['announcements'];
+      } else if (payload['results'] is List) {
+        payload = payload['results'];
+      }
+    }
+    if (payload is List) {
+      return payload
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    throw const CommunityServiceException(
+      'Unexpected server list response format.',
+    );
   }
 
   Map<String, dynamic> _unwrapObject(dynamic responseData) {
@@ -332,234 +950,21 @@ class CommunityService {
     throw const CommunityServiceException('Unexpected server response format.');
   }
 
-  bool _isConnectionError(DioException e) {
-    return e.type == DioExceptionType.connectionError ||
-        e.type == DioExceptionType.connectionTimeout ||
-        e.response?.statusCode == 404 ||
-        e.response?.statusCode == 500;
-  }
-
-  CommunityServiceException _mapDioException(DioException error, String fallback) {
+  CommunityServiceException _mapDioException(
+    DioException error,
+    String fallback,
+  ) {
     final data = error.response?.data;
     String? msg;
     if (data is Map && data['message'] != null) {
       msg = data['message'].toString();
     }
-    return CommunityServiceException(msg ?? fallback, statusCode: error.response?.statusCode);
+    return CommunityServiceException(
+      msg ?? fallback,
+      statusCode: error.response?.statusCode,
+    );
   }
 
-  // ── Smart Mock / Fallback Data ─────────────────────────────────
-
-  List<CommunityCategoryModel> _defaultCategories() {
-    return const [
-      CommunityCategoryModel(id: 1, name: 'All', icon: '🌟', slug: 'all'),
-      CommunityCategoryModel(id: 2, name: 'Sports & Games', icon: '🏏', slug: 'sports'),
-      CommunityCategoryModel(id: 3, name: 'Society & RWA', icon: '🏢', slug: 'society'),
-      CommunityCategoryModel(id: 4, name: 'Fitness & Gym', icon: '💪', slug: 'fitness'),
-      CommunityCategoryModel(id: 5, name: 'Buy & Sell', icon: '🛍️', slug: 'market'),
-      CommunityCategoryModel(id: 6, name: 'Food & Cooking', icon: '🍲', slug: 'food'),
-      CommunityCategoryModel(id: 7, name: 'Moms & Parenting', icon: '👶', slug: 'parenting'),
-      CommunityCategoryModel(id: 8, name: 'Tech & Gadgets', icon: '💻', slug: 'tech'),
-      CommunityCategoryModel(id: 9, name: 'Books & Learning', icon: '📚', slug: 'books'),
-    ];
-  }
-
-  List<CommunityModel> _mockMyCommunities() {
-    return [
-      CommunityModel(
-        id: 101,
-        name: 'Sunday Cricket League Sector 62',
-        description: 'Neighborhood cricket enthusiasts meeting every Sunday 7 AM at Mini Stadium.',
-        category: 'Sports & Games',
-        categoryId: 2,
-        isPrivate: false,
-        membersCount: 48,
-        postsCount: 132,
-        isMember: true,
-        myRole: CommunityRole.admin,
-        createdAt: DateTime.now().subtract(const Duration(days: 30)),
-        rules: ['Be punctual for morning matches', 'Bring your own kit if available', 'Respect umpire decisions'],
-        hasUnread: true,
-      ),
-      CommunityModel(
-        id: 102,
-        name: 'Greenwood RWA Residents',
-        description: 'Official resident community for tower announcements, maintenance, and parking discussions.',
-        category: 'Society & RWA',
-        categoryId: 3,
-        isPrivate: true,
-        membersCount: 184,
-        postsCount: 340,
-        isMember: true,
-        myRole: CommunityRole.member,
-        createdAt: DateTime.now().subtract(const Duration(days: 60)),
-        rules: ['Only verified flat owners & tenants', 'No promotional ads without admin approval'],
-        hasUnread: false,
-      ),
-    ];
-  }
-
-  List<CommunityModel> _mockSuggestedCommunities({int? categoryId, String? search}) {
-    final all = [
-      ..._mockMyCommunities(),
-      CommunityModel(
-        id: 103,
-        name: 'Indirapuram Organic Terrace Gardening',
-        description: 'Share seeds, gardening tips, compost techniques, and plant care for terrace gardens.',
-        category: 'Food & Cooking',
-        categoryId: 6,
-        isPrivate: false,
-        membersCount: 230,
-        postsCount: 512,
-        isMember: false,
-        myRole: CommunityRole.none,
-        createdAt: DateTime.now().subtract(const Duration(days: 45)),
-        rules: ['Only organic techniques', 'Free seed exchange encouraged'],
-      ),
-      CommunityModel(
-        id: 104,
-        name: 'Noida Runners & Cycling Club',
-        description: 'Morning runners, cycling routes, 10k marathon prep, and weekend group rides.',
-        category: 'Fitness & Gym',
-        categoryId: 4,
-        isPrivate: false,
-        membersCount: 410,
-        postsCount: 680,
-        isMember: false,
-        myRole: CommunityRole.none,
-        createdAt: DateTime.now().subtract(const Duration(days: 90)),
-        rules: ['Safety helmet mandatory for cycling', 'Track times on Strava'],
-      ),
-      CommunityModel(
-        id: 105,
-        name: 'Sector 62 Used Goods & Buy-Sell',
-        description: 'Hyper-local marketplace for selling furniture, electronics, cycles, and books among neighbors.',
-        category: 'Buy & Sell',
-        categoryId: 5,
-        isPrivate: false,
-        membersCount: 590,
-        postsCount: 1240,
-        isMember: false,
-        myRole: CommunityRole.none,
-        createdAt: DateTime.now().subtract(const Duration(days: 120)),
-        rules: ['Genuine photos only', 'Mention fixed or negotiable price clearly'],
-      ),
-      CommunityModel(
-        id: 106,
-        name: 'Patna Tech & Developers Meetup',
-        description: 'Flutter, Node.js, AI, and startup founders discussions and weekend hackathons.',
-        category: 'Tech & Gadgets',
-        categoryId: 8,
-        isPrivate: false,
-        membersCount: 165,
-        postsCount: 290,
-        isMember: false,
-        myRole: CommunityRole.none,
-        createdAt: DateTime.now().subtract(const Duration(days: 15)),
-        rules: ['No spam or job broker links', 'Share real tech questions & projects'],
-      ),
-    ];
-
-    if (search != null && search.isNotEmpty) {
-      return all.where((c) => c.name.toLowerCase().contains(search.toLowerCase()) || (c.description?.toLowerCase().contains(search.toLowerCase()) ?? false)).toList();
-    }
-    if (categoryId != null && categoryId > 1) {
-      return all.where((c) => c.categoryId == categoryId).toList();
-    }
-    return all;
-  }
-
-  List<CommunityMemberModel> _mockMembers() {
-    return [
-      CommunityMemberModel(
-        id: 1,
-        userId: 1,
-        fullName: 'Rahul Sharma',
-        userName: '@rahul_cricket',
-        role: CommunityRole.admin,
-        joinedAt: DateTime.now().subtract(const Duration(days: 30)),
-      ),
-      CommunityMemberModel(
-        id: 2,
-        userId: 2,
-        fullName: 'Vikram Patel',
-        userName: '@vikram_p',
-        role: CommunityRole.moderator,
-        joinedAt: DateTime.now().subtract(const Duration(days: 28)),
-      ),
-      CommunityMemberModel(
-        id: 3,
-        userId: 3,
-        fullName: 'Priya Verma',
-        userName: '@priya_v',
-        role: CommunityRole.member,
-        joinedAt: DateTime.now().subtract(const Duration(days: 15)),
-      ),
-      CommunityMemberModel(
-        id: 4,
-        userId: 4,
-        fullName: 'Amit Kumar',
-        userName: '@amit_k',
-        role: CommunityRole.member,
-        joinedAt: DateTime.now().subtract(const Duration(days: 10)),
-      ),
-      CommunityMemberModel(
-        id: 5,
-        userId: 5,
-        fullName: 'Sneha Gupta',
-        userName: '@sneha_g',
-        role: CommunityRole.member,
-        joinedAt: DateTime.now().subtract(const Duration(days: 5)),
-      ),
-    ];
-  }
-
-  List<CommunityPostModel> _mockPosts(int communityId) {
-    return [
-      CommunityPostModel(
-        id: 201,
-        communityId: communityId,
-        authorId: 1,
-        authorName: 'Rahul Sharma',
-        authorRole: 'Admin',
-        content: '🏏 Match Alert! This Sunday we are having a friendly tournament at Sector 62 Ground at 7:00 AM sharp. Please confirm your availability in comments!',
-        likesCount: 14,
-        commentsCount: 9,
-        isLikedByMe: true,
-        createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-      ),
-      CommunityPostModel(
-        id: 202,
-        communityId: communityId,
-        authorId: 2,
-        authorName: 'Vikram Patel',
-        authorRole: 'Moderator',
-        content: 'New leather balls and scorebook arrived today! Sponsored by Sharma Sweets. See everyone on field! 🏆',
-        likesCount: 8,
-        commentsCount: 3,
-        isLikedByMe: false,
-        createdAt: DateTime.now().subtract(const Duration(hours: 18)),
-      ),
-    ];
-  }
-
-  List<CommunityPollModel> _mockPolls(int communityId) {
-    return [
-      CommunityPollModel(
-        id: 301,
-        communityId: communityId,
-        question: 'Which day is better for the next 20-Over Tournament?',
-        createdByName: 'Rahul Sharma',
-        options: const [
-          PollOptionModel(id: 1, text: 'Saturday Morning (6:30 AM)', votesCount: 18, isVotedByMe: false),
-          PollOptionModel(id: 2, text: 'Sunday Morning (7:00 AM)', votesCount: 32, isVotedByMe: true),
-          PollOptionModel(id: 3, text: 'Sunday Afternoon (4:00 PM)', votesCount: 5, isVotedByMe: false),
-        ],
-        totalVotes: 55,
-        hasVoted: true,
-        endsAt: DateTime.now().add(const Duration(days: 3)),
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-      ),
-    ];
-  }
+  int _asInt(dynamic value, {int fallback = 0}) =>
+      value is int ? value : int.tryParse(value?.toString() ?? '') ?? fallback;
 }

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../models/community_models.dart';
 import '../../services/community_service.dart';
 import '../dashboard/main_dashboard.dart';
 import 'community_detail_screen.dart';
+import 'community_invitations_screen.dart';
 import 'create_community_screen.dart';
 import 'widgets/community_card.dart';
 
@@ -20,10 +23,12 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
   final _searchController = TextEditingController();
 
   List<CommunityCategoryModel> _categories = [];
-  int _selectedCategoryId = 1; // 1 = 'All'
+  int _selectedCategoryId = 0; // 0 = local "All" sentinel
+  Timer? _searchDebounce;
 
   List<CommunityModel> _myCommunities = [];
   List<CommunityModel> _suggestedCommunities = [];
+  final Set<int> _joiningCommunityIds = {};
 
   bool _isLoading = true;
   String? _error;
@@ -58,11 +63,15 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
       final catsFuture = _communityService.getCategories();
       final myFuture = _communityService.getMyCommunities();
       final suggestedFuture = _communityService.getSuggestedCommunities(
-        categoryId: _selectedCategoryId > 1 ? _selectedCategoryId : null,
+        categoryId: _selectedCategoryId > 0 ? _selectedCategoryId : null,
         search: _searchQuery.isNotEmpty ? _searchQuery : null,
       );
 
-      final results = await Future.wait([catsFuture, myFuture, suggestedFuture]);
+      final results = await Future.wait([
+        catsFuture,
+        myFuture,
+        suggestedFuture,
+      ]);
 
       if (mounted) {
         setState(() {
@@ -85,37 +94,58 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
   Future<void> _filterBySearchOrCategory() async {
     try {
       final suggested = await _communityService.getSuggestedCommunities(
-        categoryId: _selectedCategoryId > 1 ? _selectedCategoryId : null,
+        categoryId: _selectedCategoryId > 0 ? _selectedCategoryId : null,
         search: _searchQuery.isNotEmpty ? _searchQuery : null,
       );
       if (mounted) {
         setState(() => _suggestedCommunities = suggested);
       }
-    } catch (_) {}
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    }
   }
 
   Future<void> _handleJoinToggle(CommunityModel community) async {
-    final isCurrentlyMember = community.isMember;
-    if (isCurrentlyMember) {
-      final success = await _communityService.leaveCommunity(community.id);
-      if (success && mounted) {
+    if (_joiningCommunityIds.contains(community.id)) return;
+    setState(() => _joiningCommunityIds.add(community.id));
+    try {
+      final isCurrentlyMember = community.isMember;
+      if (isCurrentlyMember) {
+        final success = await _communityService.leaveCommunity(community.id);
+        if (success && mounted) {
+          setState(() {
+            _myCommunities.removeWhere((c) => c.id == community.id);
+            final idx = _suggestedCommunities.indexWhere(
+              (c) => c.id == community.id,
+            );
+            if (idx != -1) {
+              _suggestedCommunities[idx] = community.copyWith(
+                isMember: false,
+                joinStatus: CommunityJoinStatus.none,
+                membersCount: (community.membersCount - 1).clamp(0, 999999),
+              );
+            }
+          });
+        }
+      } else {
+        final result = await _communityService.joinCommunity(community.id);
+        if (!mounted) return;
+        final joined = result.isMember;
+        final updated = community.copyWith(
+          isMember: joined,
+          joinStatus: result.status,
+          membersCount: joined
+              ? community.membersCount + 1
+              : community.membersCount,
+          myRole: joined ? CommunityRole.member : CommunityRole.none,
+        );
         setState(() {
-          _myCommunities.removeWhere((c) => c.id == community.id);
-          final idx = _suggestedCommunities.indexWhere((c) => c.id == community.id);
-          if (idx != -1) {
-            _suggestedCommunities[idx] = community.copyWith(isMember: false, membersCount: (community.membersCount - 1).clamp(0, 999999));
-          }
-        });
-      }
-    } else {
-      final success = await _communityService.joinCommunity(community.id);
-      if (success && mounted) {
-        final updated = community.copyWith(isMember: true, membersCount: community.membersCount + 1);
-        setState(() {
-          if (!_myCommunities.any((c) => c.id == community.id)) {
+          if (joined && !_myCommunities.any((c) => c.id == community.id)) {
             _myCommunities.add(updated);
           }
-          final idx = _suggestedCommunities.indexWhere((c) => c.id == community.id);
+          final idx = _suggestedCommunities.indexWhere(
+            (c) => c.id == community.id,
+          );
           if (idx != -1) {
             _suggestedCommunities[idx] = updated;
           }
@@ -123,12 +153,22 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              community.isPrivate ? 'Join request sent to Admin!' : '🎉 Joined ${community.name}!',
+              result.isPending
+                  ? 'Join request sent to Admin!'
+                  : '🎉 Joined ${community.name}!',
             ),
             backgroundColor: const Color(0xFF10B981),
           ),
         );
       }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString()), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _joiningCommunityIds.remove(community.id));
     }
   }
 
@@ -136,6 +176,7 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -170,6 +211,19 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
           ),
           actions: [
             IconButton(
+              tooltip: 'Community invitations',
+              icon: const Icon(Icons.mail_outline_rounded, color: darkText),
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CommunityInvitationsScreen(),
+                  ),
+                );
+                if (mounted) await _loadInitialData();
+              },
+            ),
+            IconButton(
               icon: const Icon(Icons.refresh_rounded, color: darkText),
               onPressed: _loadInitialData,
             ),
@@ -181,7 +235,10 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
               children: [
                 // Search Bar
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
                   child: Container(
                     height: 42,
                     decoration: BoxDecoration(
@@ -193,11 +250,22 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
                       style: const TextStyle(fontSize: 14),
                       decoration: InputDecoration(
                         hintText: 'Search communities, sports, clubs...',
-                        hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
-                        prefixIcon: const Icon(Icons.search, color: Colors.grey, size: 20),
+                        hintStyle: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 13,
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: Colors.grey,
+                          size: 20,
+                        ),
                         suffixIcon: _searchQuery.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.close, size: 16, color: Colors.grey),
+                                icon: const Icon(
+                                  Icons.close,
+                                  size: 16,
+                                  color: Colors.grey,
+                                ),
                                 onPressed: () {
                                   _searchController.clear();
                                   setState(() => _searchQuery = '');
@@ -206,11 +274,17 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
                               )
                             : null,
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 11,
+                        ),
                       ),
                       onChanged: (val) {
                         setState(() => _searchQuery = val);
-                        _filterBySearchOrCategory();
+                        _searchDebounce?.cancel();
+                        _searchDebounce = Timer(
+                          const Duration(milliseconds: 350),
+                          _filterBySearchOrCategory,
+                        );
                       },
                     ),
                   ),
@@ -221,7 +295,10 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
                   controller: _tabController,
                   labelColor: primaryOrange,
                   unselectedLabelColor: greySubtext,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  labelStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                   indicatorColor: primaryOrange,
                   indicatorWeight: 2.5,
                   tabs: [
@@ -241,27 +318,58 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
                 height: 48,
                 color: Colors.white,
                 child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   scrollDirection: Axis.horizontal,
                   itemCount: _categories.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final cat = _categories[index];
                     final isSelected = _selectedCategoryId == cat.id;
 
+                    // Determine if icon is a URL (points to a server) or an emoji
+                    final icon = cat.icon;
+                    final bool isUrlIcon =
+                        icon != null &&
+                        (icon.startsWith('http') || icon.startsWith('/'));
+                    final bool isEmojiIcon =
+                        icon != null && !isUrlIcon && icon.isNotEmpty;
+
                     return ChoiceChip(
+                      avatar: isUrlIcon
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.network(
+                                icon,
+                                width: 18,
+                                height: 18,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => const Icon(
+                                  Icons.category_rounded,
+                                  size: 14,
+                                  color: primaryOrange,
+                                ),
+                              ),
+                            )
+                          : null,
                       label: Text(
-                        '${cat.icon ?? ''} ${cat.name}',
+                        isEmojiIcon ? '$icon ${cat.name}' : cat.name,
                         style: TextStyle(
                           color: isSelected ? Colors.white : darkText,
                           fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w500,
                         ),
                       ),
                       selected: isSelected,
                       selectedColor: primaryOrange,
                       backgroundColor: const Color(0xFFF3F4F6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
                       showCheckmark: false,
                       onSelected: (selected) {
                         if (selected) {
@@ -277,41 +385,47 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
             // Body content
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: primaryOrange))
+                  ? const Center(
+                      child: CircularProgressIndicator(color: primaryOrange),
+                    )
                   : _error != null
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.cloud_off_rounded, size: 48, color: Colors.grey),
-                                const SizedBox(height: 12),
-                                Text(
-                                  _error!,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(color: darkText, fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: _loadInitialData,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: primaryOrange,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                  child: const Text('Retry'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : TabBarView(
-                          controller: _tabController,
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _buildMyGroupsList(),
-                            _buildDiscoverList(),
+                            const Icon(
+                              Icons.cloud_off_rounded,
+                              size: 48,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _error!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: darkText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _loadInitialData,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryOrange,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Retry'),
+                            ),
                           ],
                         ),
+                      ),
+                    )
+                  : TabBarView(
+                      controller: _tabController,
+                      children: [_buildMyGroupsList(), _buildDiscoverList()],
+                    ),
             ),
           ],
         ),
@@ -358,12 +472,20 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
                   color: Color(0xFFFFF5EE),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.groups_outlined, size: 40, color: Color(0xFFFF6B00)),
+                child: const Icon(
+                  Icons.groups_outlined,
+                  size: 40,
+                  color: Color(0xFFFF6B00),
+                ),
               ),
               const SizedBox(height: 16),
               const Text(
                 'No Groups Joined Yet',
-                style: TextStyle(color: darkText, fontWeight: FontWeight.bold, fontSize: 17),
+                style: TextStyle(
+                  color: darkText,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
               ),
               const SizedBox(height: 6),
               const Text(
@@ -377,7 +499,9 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6B00),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                 ),
                 child: const Text('Discover Nearby Groups'),
               ),
@@ -393,7 +517,7 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _myCommunities.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           final item = _myCommunities[index];
           return CommunityCard(
@@ -407,6 +531,7 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
               ).then((_) => _loadInitialData());
             },
             onJoinToggle: () => _handleJoinToggle(item),
+            isJoining: _joiningCommunityIds.contains(item.id),
           );
         },
       ),
@@ -428,7 +553,11 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
               SizedBox(height: 12),
               Text(
                 'No Communities Found',
-                style: TextStyle(color: darkText, fontWeight: FontWeight.bold, fontSize: 16),
+                style: TextStyle(
+                  color: darkText,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
               Text(
                 'Try searching with a different keyword or category.',
@@ -446,7 +575,7 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _suggestedCommunities.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           final item = _suggestedCommunities[index];
           return CommunityCard(
@@ -460,6 +589,7 @@ class _CommunityGroupsScreenState extends State<CommunityGroupsScreen>
               ).then((_) => _loadInitialData());
             },
             onJoinToggle: () => _handleJoinToggle(item),
+            isJoining: _joiningCommunityIds.contains(item.id),
           );
         },
       ),

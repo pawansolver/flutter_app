@@ -221,7 +221,7 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
                           alignment: Alignment.topRight,
                           padding: const EdgeInsets.all(8),
                           child: CircleAvatar(
-                            backgroundColor: Colors.black.withOpacity(0.6),
+                            backgroundColor: Colors.black.withValues(alpha: 0.6),
                             radius: 16,
                             child: const Icon(Icons.edit, color: Colors.white, size: 16),
                           ),
@@ -285,18 +285,47 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
                     isExpanded: true,
                     icon: const Icon(Icons.keyboard_arrow_down_rounded, color: greySubtext),
                     items: _categories.map((cat) {
+                      final icon = cat.icon;
+                      final bool isUrlIcon = icon != null &&
+                          (icon.startsWith('http') || icon.startsWith('/'));
+                      final bool isEmojiIcon =
+                          icon != null && !isUrlIcon && icon.isNotEmpty;
+
                       return DropdownMenuItem<int>(
                         value: cat.id,
                         child: Row(
                           children: [
-                            Text(cat.icon ?? '📁', style: const TextStyle(fontSize: 16)),
+                            if (isUrlIcon)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: Image.network(
+                                  icon,
+                                  width: 22,
+                                  height: 22,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => const Icon(
+                                    Icons.category_rounded,
+                                    size: 20,
+                                    color: primaryOrange,
+                                  ),
+                                ),
+                              )
+                            else
+                              Text(
+                                isEmojiIcon ? icon : '📁',
+                                style: const TextStyle(fontSize: 16),
+                              ),
                             const SizedBox(width: 10),
-                            Text(
-                              cat.name,
-                              style: const TextStyle(
-                                color: darkText,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                            Expanded(
+                              child: Text(
+                                cat.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: darkText,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ],

@@ -4,13 +4,17 @@ import 'dart:io' show Platform;
 class ApiConfig {
   /// Toggle to easily switch between Localhost backend and Live Production Server.
   /// When true (or in debug mode), the app connects to the local backend on port 5000.
-  static const bool useLocalhost = true;
+  static const bool useLocalhost = false;
 
   /// Live Production API URL
   static const String _productionUrl = 'https://api.smartgali.com/api/v1';
 
-  /// Local Machine Wi-Fi IP (for physical Android/iOS device testing over Wi-Fi)
-  static const String localLanIp = '10.19.176.105';
+  /// Set this to true if testing on a REAL PHYSICAL PHONE connected via Wi-Fi.
+  /// Set to false if testing on Android Emulator / Web / Desktop.
+  static const bool usePhysicalPhoneLan = false;
+
+  /// Local Machine Wi-Fi IP (current IP: 192.168.31.15)
+  static const String localLanIp = '192.168.31.15';
   static const int localPort = 5000;
 
   static const String _configuredUrl = String.fromEnvironment(
@@ -20,14 +24,21 @@ class ApiConfig {
 
   /// Local dev URLs automatically resolved based on runtime platform:
   /// - Web (Chrome/Edge): http://127.0.0.1:5000/api/v1
-  /// - Android Emulator: http://10.0.2.2:5000/api/v1 (10.0.2.2 routes to host localhost)
+  /// - Android Emulator: http://10.0.2.2:5000/api/v1
+  /// - Real Android Phone (Wi-Fi): http://192.168.31.15:5000/api/v1
   /// - iOS Simulator / macOS / Windows Desktop: http://localhost:5000/api/v1
   static String get _localDevUrl {
     if (kIsWeb) {
       return 'http://127.0.0.1:$localPort/api/v1'; // Chrome / Web browser
     } else if (Platform.isAndroid) {
+      if (usePhysicalPhoneLan) {
+        return 'http://$localLanIp:$localPort/api/v1'; // Physical Android device over Wi-Fi
+      }
       return 'http://10.0.2.2:$localPort/api/v1'; // Android Emulator
     } else if (Platform.isIOS) {
+      if (usePhysicalPhoneLan) {
+        return 'http://$localLanIp:$localPort/api/v1'; // Physical iOS device over Wi-Fi
+      }
       return 'http://localhost:$localPort/api/v1'; // iOS Simulator
     } else {
       return 'http://localhost:$localPort/api/v1'; // Desktop (Windows/Mac/Linux)
@@ -76,7 +87,9 @@ class ApiConfig {
     // This happens if the backend misconfigures its BASE_URL env var.
     if (parsed.host == 'localhost' || parsed.host == '127.0.0.1') {
       final apiUri = Uri.parse(baseUrl);
-      return parsed.replace(scheme: apiUri.scheme, host: apiUri.host, port: apiUri.port).toString();
+      return parsed
+          .replace(scheme: apiUri.scheme, host: apiUri.host, port: apiUri.port)
+          .toString();
     }
 
     return parsed.toString();
@@ -179,13 +192,53 @@ class ApiConfig {
   static String community(int id) => "$baseUrl/communities/$id";
   static String get myCommunities => "$baseUrl/communities/my";
   static String get suggestedCommunities => "$baseUrl/communities/suggested";
-  static String get communityCategories => "$baseUrl/communities/categories";
+  static String get myCommunityInvitations =>
+      "$baseUrl/communities/invitations";
+  static String get communityCategories => "$baseUrl/community-category";
   static String joinCommunity(int id) => "$baseUrl/communities/$id/join";
   static String leaveCommunity(int id) => "$baseUrl/communities/$id/leave";
   static String communityMembers(int id) => "$baseUrl/communities/$id/members";
+  static String communityMemberRole(int communityId, int userId) =>
+      "$baseUrl/communities/$communityId/members/$userId/role";
+  static String communityMember(int communityId, int userId) =>
+      "$baseUrl/communities/$communityId/members/$userId";
+  static String banCommunityMember(int communityId, int userId) =>
+      "${communityMember(communityId, userId)}/ban";
+  static String unbanCommunityMember(int communityId, int userId) =>
+      "${communityMember(communityId, userId)}/unban";
+  static String communityInviteableUsers(int id) =>
+      "$baseUrl/communities/$id/inviteable-users";
+  static String communityInvitations(int id) =>
+      "$baseUrl/communities/$id/invitations";
+  static String respondCommunityInvitation(int communityId, int invitationId) =>
+      "${communityInvitations(communityId)}/$invitationId/respond";
   static String communityFeed(int id) => "$baseUrl/communities/$id/feed";
   static String communityPolls(int id) => "$baseUrl/communities/$id/polls";
-  static String voteCommunityPoll(int pollId) => "$baseUrl/communities/polls/$pollId/vote";
+  static String communityPoll(int communityId, int pollId) =>
+      "${communityPolls(communityId)}/$pollId";
+  static String voteCommunityPoll(int communityId, int pollId) =>
+      "$baseUrl/communities/$communityId/polls/$pollId/vote";
+  static String communityAnnouncements(int id) =>
+      "$baseUrl/communities/$id/announcements";
+  static String communityAnnouncement(int communityId, int announcementId) =>
+      "${communityAnnouncements(communityId)}/$announcementId";
+  static String communityDocuments(int id) =>
+      "$baseUrl/communities/$id/documents";
+  static String communityDocument(int communityId, int documentId) =>
+      "${communityDocuments(communityId)}/$documentId";
+  static String communityGallery(int id) => "$baseUrl/communities/$id/gallery";
+  static String communityGalleryMedia(int communityId, int mediaId) =>
+      "${communityGallery(communityId)}/$mediaId";
+  static String communityEvents(int id) => "$baseUrl/communities/$id/events";
+  static String communityEventRsvp(int communityId, int eventId) =>
+      "$baseUrl/communities/$communityId/events/$eventId/rsvp";
+  static String communityChat(int id) => "$baseUrl/communities/$id/chat";
+  static String communityJoinRequests(int id) =>
+      "$baseUrl/communities/$id/join-requests";
+  static String approveJoinRequest(int id, int reqId) =>
+      "$baseUrl/communities/$id/join-requests/$reqId/approve";
+  static String rejectJoinRequest(int id, int reqId) =>
+      "$baseUrl/communities/$id/join-requests/$reqId/reject";
 
   // ── Socket.IO base URL (no /api/v1 path) ────────────────────
   static String get socketUrl {

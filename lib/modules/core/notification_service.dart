@@ -98,7 +98,14 @@ class AppNotification {
   }
 
   /// Returns the deep-link target type from the notification data payload.
-  String? get deepLinkTarget => data?['target']?.toString();
+  String? get deepLinkTarget {
+    final target = data?['target']?.toString();
+    if (target == null || target.isEmpty) return null;
+    if (target.startsWith('/communities/')) return 'community';
+    if (target.startsWith('/chat/')) return 'chat';
+    if (target.startsWith('/post/')) return 'post';
+    return target;
+  }
 }
 
 /// Paginated feed payload for the notifications screen.

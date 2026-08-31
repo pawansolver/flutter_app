@@ -98,7 +98,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final decoded = utf8.decode(base64Url.decode(normalized));
       final Map<String, dynamic> map = json.decode(decoded);
       final uid = map['id'] ?? map['userId'] ?? map['sub'];
-      if (uid != null && mounted) setState(() => _currentUserId = int.tryParse(uid.toString()));
+      if (uid != null && mounted) {
+        setState(() => _currentUserId = int.tryParse(uid.toString()));
+      }
     } catch (_) {}
   }
 
@@ -348,8 +350,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           onPostViewed: _onPostViewed,
                           onComment: () async => _openComments(post),
                           onShare: () => _sharePost(post),
-                          onDeleted: () => setState(() => _posts.removeWhere((p) => p.id == post.id)),
-                          onHideUserPosts: (authorId) => setState(() => _posts.removeWhere((p) => p.authorUserId == authorId)),
+                          onDeleted: () => setState(
+                            () => _posts.removeWhere((p) => p.id == post.id),
+                          ),
+                          onHideUserPosts: (authorId) => setState(
+                            () => _posts.removeWhere(
+                              (p) => p.authorUserId == authorId,
+                            ),
+                          ),
                         ),
                       );
                     }),
@@ -723,8 +731,10 @@ class _PostCardState extends State<_PostCard>
       duration: const Duration(milliseconds: 150),
       reverseDuration: const Duration(milliseconds: 100),
     );
-    _scaleAnim = Tween<double>(begin: 1.0, end: 1.3)
-        .animate(CurvedAnimation(parent: _scaleCtrl, curve: Curves.easeOut));
+    _scaleAnim = Tween<double>(
+      begin: 1.0,
+      end: 1.3,
+    ).animate(CurvedAnimation(parent: _scaleCtrl, curve: Curves.easeOut));
 
     // Enterprise MRC Standard: 1.2s dwell timer for non-author viewers
     if (widget.currentUserId != null &&
@@ -771,42 +781,75 @@ class _PostCardState extends State<_PostCard>
     if (_likePending) return;
     final wasLiked = _isLiked;
     final prevCount = _likeCount;
-    setState(() { _isLiked = !wasLiked; _likeCount = wasLiked ? prevCount - 1 : prevCount + 1; _likePending = true; });
+    setState(() {
+      _isLiked = !wasLiked;
+      _likeCount = wasLiked ? prevCount - 1 : prevCount + 1;
+      _likePending = true;
+    });
     _scaleCtrl.forward().then((_) => _scaleCtrl.reverse());
-    final result = await widget.service.toggleLike(widget.post.id, isCurrentlyLiked: wasLiked);
+    final result = await widget.service.toggleLike(
+      widget.post.id,
+      isCurrentlyLiked: wasLiked,
+    );
     if (!mounted) return;
     setState(() => _likePending = false);
     if (!result.isSuccess) {
-      setState(() { _isLiked = wasLiked; _likeCount = prevCount; });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result.error ?? 'Could not like post'),
-        backgroundColor: Colors.red.shade600, behavior: SnackBarBehavior.floating,
-      ));
+      setState(() {
+        _isLiked = wasLiked;
+        _likeCount = prevCount;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.error ?? 'Could not like post'),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } else {
       final sc = result.data?['likesCount'];
       final sl = result.data?['isLikedByMe'];
       setState(() {
-        if (sc != null) _likeCount = sc is int ? sc : int.tryParse(sc.toString()) ?? _likeCount;
+        if (sc != null) {
+          _likeCount = sc is int
+              ? sc
+              : int.tryParse(sc.toString()) ?? _likeCount;
+        }
         if (sl is bool) _isLiked = sl;
       });
       widget.post.isLikedByMe = _isLiked;
       widget.post.likesCount = _likeCount;
     }
   }
+
   Future<void> _handleSave() async {
     if (_savePending) return;
     final wasSaved = _isSaved;
-    setState(() { _isSaved = !wasSaved; _savePending = true; });
+    setState(() {
+      _isSaved = !wasSaved;
+      _savePending = true;
+    });
     widget.post.isSaved = _isSaved;
-    final result = await widget.service.toggleSavePost(widget.post.id, isCurrentlySaved: wasSaved);
+    final result = await widget.service.toggleSavePost(
+      widget.post.id,
+      isCurrentlySaved: wasSaved,
+    );
     if (!mounted) return;
     setState(() => _savePending = false);
     if (!result.isSuccess) {
-      setState(() { _isSaved = wasSaved; });
+      setState(() {
+        _isSaved = wasSaved;
+      });
       widget.post.isSaved = wasSaved;
-      _showToast(result.error ?? 'Could not update saved status', isError: true);
+      _showToast(
+        result.error ?? 'Could not update saved status',
+        isError: true,
+      );
     } else {
-      _showToast(_isSaved ? 'Post saved to your bookmarks' : 'Post removed from bookmarks');
+      _showToast(
+        _isSaved
+            ? 'Post saved to your bookmarks'
+            : 'Post removed from bookmarks',
+      );
     }
   }
 
@@ -815,7 +858,9 @@ class _PostCardState extends State<_PostCard>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: isError ? Colors.red.shade600 : const Color(0xFF10B981),
+        backgroundColor: isError
+            ? Colors.red.shade600
+            : const Color(0xFF10B981),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
       ),
@@ -823,7 +868,8 @@ class _PostCardState extends State<_PostCard>
   }
 
   Future<void> _openContextMenu() async {
-    final bool isAuthor = (widget.currentUserId != null &&
+    final bool isAuthor =
+        (widget.currentUserId != null &&
         widget.post.authorUserId != null &&
         widget.currentUserId == widget.post.authorUserId);
 
@@ -832,10 +878,8 @@ class _PostCardState extends State<_PostCard>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => _PostContextMenuSheet(
-        post: widget.post,
-        isAuthor: isAuthor,
-      ),
+      builder: (ctx) =>
+          _PostContextMenuSheet(post: widget.post, isAuthor: isAuthor),
     );
 
     if (action == null || !mounted) return;
@@ -908,7 +952,11 @@ class _PostCardState extends State<_PostCard>
                 children: [
                   const Text(
                     'Edit Post',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF111827),
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, color: Color(0xFF6B7280)),
@@ -945,12 +993,18 @@ class _PostCardState extends State<_PostCard>
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF10B981),
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     elevation: 0,
                   ),
                   child: const Text(
                     'Save Changes',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
               ),
@@ -967,7 +1021,10 @@ class _PostCardState extends State<_PostCard>
         widget.post.content = updatedText;
         widget.post.isEdited = true;
       });
-      final res = await widget.service.editPost(widget.post.id, content: updatedText);
+      final res = await widget.service.editPost(
+        widget.post.id,
+        content: updatedText,
+      );
       if (!mounted) return;
       if (res.isSuccess) {
         _showToast('Post updated successfully');
@@ -990,7 +1047,11 @@ class _PostCardState extends State<_PostCard>
     final res = await widget.service.togglePinPost(widget.post.id);
     if (!mounted) return;
     if (res.isSuccess) {
-      _showToast(widget.post.isPinned ? 'Post pinned to top of profile' : 'Post unpinned from profile');
+      _showToast(
+        widget.post.isPinned
+            ? 'Post pinned to top of profile'
+            : 'Post unpinned from profile',
+      );
     } else {
       setState(() {
         widget.post.isPinned = !targetState;
@@ -1008,12 +1069,19 @@ class _PostCardState extends State<_PostCard>
     final res = await widget.service.toggleComments(widget.post.id);
     if (!mounted) return;
     if (res.isSuccess) {
-      _showToast(widget.post.commentsDisabled ? 'Comments turned off for this post' : 'Comments turned on for this post');
+      _showToast(
+        widget.post.commentsDisabled
+            ? 'Comments turned off for this post'
+            : 'Comments turned on for this post',
+      );
     } else {
       setState(() {
         widget.post.commentsDisabled = !targetState;
       });
-      _showToast(res.error ?? 'Failed to update comment settings', isError: true);
+      _showToast(
+        res.error ?? 'Failed to update comment settings',
+        isError: true,
+      );
     }
   }
 
@@ -1029,7 +1097,10 @@ class _PostCardState extends State<_PostCard>
           children: [
             Icon(Icons.analytics_outlined, color: Color(0xFF6366F1), size: 24),
             SizedBox(width: 8),
-            Text('Post Insights', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              'Post Insights',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         content: FutureBuilder<FeedResult<Map<String, dynamic>>>(
@@ -1042,9 +1113,18 @@ class _PostCardState extends State<_PostCard>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF6366F1)),
+                      CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Color(0xFF6366F1),
+                      ),
                       SizedBox(height: 12),
-                      Text('Fetching live analytics...', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                      Text(
+                        'Fetching live analytics...',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1063,19 +1143,54 @@ class _PostCardState extends State<_PostCard>
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _InsightItem(icon: Icons.people_alt_outlined, color: const Color(0xFF3B82F6), label: 'Unique Reach (People)', value: '$reach'),
+                _InsightItem(
+                  icon: Icons.people_alt_outlined,
+                  color: const Color(0xFF3B82F6),
+                  label: 'Unique Reach (People)',
+                  value: '$reach',
+                ),
                 const SizedBox(height: 8),
-                _InsightItem(icon: Icons.remove_red_eye_outlined, color: const Color(0xFF0EA5E9), label: 'Total Impressions / Views', value: '$impressions'),
+                _InsightItem(
+                  icon: Icons.remove_red_eye_outlined,
+                  color: const Color(0xFF0EA5E9),
+                  label: 'Total Impressions / Views',
+                  value: '$impressions',
+                ),
                 const SizedBox(height: 8),
-                _InsightItem(icon: Icons.favorite, color: Colors.redAccent, label: 'Likes (Real DB)', value: '$likes'),
+                _InsightItem(
+                  icon: Icons.favorite,
+                  color: Colors.redAccent,
+                  label: 'Likes (Real DB)',
+                  value: '$likes',
+                ),
                 const SizedBox(height: 8),
-                _InsightItem(icon: Icons.chat_bubble, color: const Color(0xFF6366F1), label: 'Comments (Real DB)', value: '$comments'),
+                _InsightItem(
+                  icon: Icons.chat_bubble,
+                  color: const Color(0xFF6366F1),
+                  label: 'Comments (Real DB)',
+                  value: '$comments',
+                ),
                 const SizedBox(height: 8),
-                _InsightItem(icon: Icons.reply, color: const Color(0xFF10B981), label: 'Shares (Real DB)', value: '$shares'),
+                _InsightItem(
+                  icon: Icons.reply,
+                  color: const Color(0xFF10B981),
+                  label: 'Shares (Real DB)',
+                  value: '$shares',
+                ),
                 const SizedBox(height: 8),
-                _InsightItem(icon: Icons.bookmark, color: const Color(0xFFF59E0B), label: 'Saves / Bookmarks', value: '$saves'),
+                _InsightItem(
+                  icon: Icons.bookmark,
+                  color: const Color(0xFFF59E0B),
+                  label: 'Saves / Bookmarks',
+                  value: '$saves',
+                ),
                 const SizedBox(height: 8),
-                _InsightItem(icon: Icons.trending_up, color: const Color(0xFF8B5CF6), label: 'Engagement Rate', value: '$rate'),
+                _InsightItem(
+                  icon: Icons.trending_up,
+                  color: const Color(0xFF8B5CF6),
+                  label: 'Engagement Rate',
+                  value: '$rate',
+                ),
               ],
             );
           },
@@ -1083,7 +1198,13 @@ class _PostCardState extends State<_PostCard>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
+            child: const Text(
+              'Close',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF10B981),
+              ),
+            ),
           ),
         ],
       ),
@@ -1128,29 +1249,54 @@ class _PostCardState extends State<_PostCard>
               ),
               ListTile(
                 leading: const Icon(Icons.public, color: Color(0xFF10B981)),
-                title: const Text('Public', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text('Anyone on or off smartgali can see this post'),
-                trailing: current == 'public' ? const Icon(Icons.check, color: Color(0xFF10B981)) : null,
+                title: const Text(
+                  'Public',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Anyone on or off smartgali can see this post',
+                ),
+                trailing: current == 'public'
+                    ? const Icon(Icons.check, color: Color(0xFF10B981))
+                    : null,
                 onTap: () {
                   setSheetState(() => current = 'public');
                   Navigator.pop(bCtx, 'public');
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.group_outlined, color: Color(0xFF6366F1)),
-                title: const Text('Followers Only', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text('Only people who follow you can see this post'),
-                trailing: current == 'followers' ? const Icon(Icons.check, color: Color(0xFF6366F1)) : null,
+                leading: const Icon(
+                  Icons.group_outlined,
+                  color: Color(0xFF6366F1),
+                ),
+                title: const Text(
+                  'Followers Only',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Only people who follow you can see this post',
+                ),
+                trailing: current == 'followers'
+                    ? const Icon(Icons.check, color: Color(0xFF6366F1))
+                    : null,
                 onTap: () {
                   setSheetState(() => current = 'followers');
                   Navigator.pop(bCtx, 'followers');
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.lock_outline, color: Color(0xFF6B7280)),
-                title: const Text('Only Me', style: TextStyle(fontWeight: FontWeight.w600)),
+                leading: const Icon(
+                  Icons.lock_outline,
+                  color: Color(0xFF6B7280),
+                ),
+                title: const Text(
+                  'Only Me',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
                 subtitle: const Text('Only visible to you (Private)'),
-                trailing: current == 'private' ? const Icon(Icons.check, color: Color(0xFF6B7280)) : null,
+                trailing: current == 'private'
+                    ? const Icon(Icons.check, color: Color(0xFF6B7280))
+                    : null,
                 onTap: () {
                   setSheetState(() => current = 'private');
                   Navigator.pop(bCtx, 'private');
@@ -1168,7 +1314,10 @@ class _PostCardState extends State<_PostCard>
       setState(() {
         widget.post.visibility = selected;
       });
-      final res = await widget.service.updateVisibility(widget.post.id, selected);
+      final res = await widget.service.updateVisibility(
+        widget.post.id,
+        selected,
+      );
       if (!mounted) return;
       if (res.isSuccess) {
         final label = selected == 'public'
@@ -1186,7 +1335,9 @@ class _PostCardState extends State<_PostCard>
 
   // ── 6. Copy Link ──────────────────────────────────────────────────
   void _handleCopyLink() {
-    Clipboard.setData(ClipboardData(text: 'https://smartgali.com/post/${widget.post.id}'));
+    Clipboard.setData(
+      ClipboardData(text: 'https://smartgali.com/post/${widget.post.id}'),
+    );
     _showToast('Post link copied to clipboard');
   }
 
@@ -1197,11 +1348,16 @@ class _PostCardState extends State<_PostCard>
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Delete Post?'),
-        content: const Text('Are you sure you want to delete this post? This action cannot be undone.'),
+        content: const Text(
+          'Are you sure you want to delete this post? This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B7280))),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Color(0xFF6B7280)),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -1224,7 +1380,10 @@ class _PostCardState extends State<_PostCard>
         widget.onDeleted?.call(); // Remove from feed only after API confirms
         _showToast('Post deleted successfully');
       } else {
-        _showToast(res.error ?? 'Failed to delete post. Please try again.', isError: true);
+        _showToast(
+          res.error ?? 'Failed to delete post. Please try again.',
+          isError: true,
+        );
       }
     }
   }
@@ -1238,12 +1397,21 @@ class _PostCardState extends State<_PostCard>
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Unfollow @$name?'),
-        content: const Text("You won't see their posts in your home feed anymore."),
+        content: const Text(
+          "You won't see their posts in your home feed anymore.",
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white, elevation: 0),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
             child: const Text('Unfollow'),
           ),
         ],
@@ -1253,11 +1421,20 @@ class _PostCardState extends State<_PostCard>
       // Enterprise: Show loading state via a snackbar
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Row(children: [
-            SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-            SizedBox(width: 12),
-            Text('Unfollowing...'),
-          ]),
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Unfollowing...'),
+            ],
+          ),
           duration: Duration(seconds: 10),
           behavior: SnackBarBehavior.floating,
         ),
@@ -1268,9 +1445,14 @@ class _PostCardState extends State<_PostCard>
       if (res.isSuccess) {
         // Hide this user's posts from feed immediately (same as mute)
         widget.onHideUserPosts?.call(widget.post.authorUserId!);
-        _showToast('Unfollowed @$name. Their posts will no longer appear in your feed.');
+        _showToast(
+          'Unfollowed @$name. Their posts will no longer appear in your feed.',
+        );
       } else {
-        _showToast(res.error ?? 'Failed to unfollow. Please try again.', isError: true);
+        _showToast(
+          res.error ?? 'Failed to unfollow. Please try again.',
+          isError: true,
+        );
       }
     }
   }
@@ -1286,12 +1468,21 @@ class _PostCardState extends State<_PostCard>
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Mute @$name?'),
-        content: Text("You won't see posts from @$name in your home feed anymore. They won't know you muted them."),
+        content: Text(
+          "You won't see posts from @$name in your home feed anymore. They won't know you muted them.",
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white, elevation: 0),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
             child: const Text('Mute'),
           ),
         ],
@@ -1300,11 +1491,20 @@ class _PostCardState extends State<_PostCard>
     if (confirmed == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Row(children: [
-            SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-            SizedBox(width: 12),
-            Text('Muting user...'),
-          ]),
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Muting user...'),
+            ],
+          ),
           duration: Duration(seconds: 10),
           behavior: SnackBarBehavior.floating,
         ),
@@ -1317,7 +1517,10 @@ class _PostCardState extends State<_PostCard>
         widget.onHideUserPosts?.call(authorId);
         _showToast('Muted @$name. You won\'t see their posts anymore.');
       } else {
-        _showToast(res.error ?? 'Failed to mute user. Please try again.', isError: true);
+        _showToast(
+          res.error ?? 'Failed to mute user. Please try again.',
+          isError: true,
+        );
       }
     }
   }
@@ -1343,14 +1546,24 @@ class _PostCardState extends State<_PostCard>
             const Text("• Send you messages or follow you"),
             const Text("• Comment on your posts"),
             const SizedBox(height: 8),
-            const Text("You also won't see their content.", style: TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
+            const Text(
+              "You also won't see their content.",
+              style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white, elevation: 0),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
             child: const Text('Block'),
           ),
         ],
@@ -1359,11 +1572,20 @@ class _PostCardState extends State<_PostCard>
     if (confirmed == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Row(children: [
-            SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-            SizedBox(width: 12),
-            Text('Blocking user...'),
-          ]),
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Blocking user...'),
+            ],
+          ),
           duration: Duration(seconds: 10),
           behavior: SnackBarBehavior.floating,
         ),
@@ -1376,7 +1598,10 @@ class _PostCardState extends State<_PostCard>
         widget.onHideUserPosts?.call(authorId);
         _showToast('Blocked @$name. You won\'t see their content anymore.');
       } else {
-        _showToast(res.error ?? 'Failed to block user. Please try again.', isError: true);
+        _showToast(
+          res.error ?? 'Failed to block user. Please try again.',
+          isError: true,
+        );
       }
     }
   }
@@ -1396,7 +1621,9 @@ class _PostCardState extends State<_PostCard>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (bCtx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
           bool isSubmitting = false;
@@ -1407,37 +1634,90 @@ class _PostCardState extends State<_PostCard>
               children: [
                 const SizedBox(height: 12),
                 Center(
-                  child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(18, 14, 18, 4),
-                  child: Text('Report Post', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111827))),
+                  child: Text(
+                    'Report Post',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
                 ),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(18, 0, 18, 8),
-                  child: Text('Select a reason for reporting this post. Your report is anonymous.', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                  child: Text(
+                    'Select a reason for reporting this post. Your report is anonymous.',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                  ),
                 ),
                 const Divider(height: 1),
-                ...reasons.map(((String reason, String desc) r) => ListTile(
-                  dense: true,
-                  title: Text(r.$1, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                  subtitle: Text(r.$2, style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
-                  trailing: isSubmitting
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6366F1)))
-                      : const Icon(Icons.chevron_right, size: 20, color: Color(0xFF9CA3AF)),
-                  onTap: isSubmitting ? null : () async {
-                    setSheetState(() => isSubmitting = true);
-                    final res = await widget.service.reportPost(widget.post.id, reason: r.$1);
-                    if (!mounted) return;
-                    // Guard context use after async gap
-                    if (bCtx.mounted) Navigator.pop(bCtx);
-                    if (res.isSuccess) {
-                      _showToast('Thank you for your report. Our team will review this post.');
-                    } else {
-                      _showToast(res.error ?? 'Could not submit report. Please try again.', isError: true);
-                    }
-                  },
-                )),
+                ...reasons.map(
+                  ((String reason, String desc) r) => ListTile(
+                    dense: true,
+                    title: Text(
+                      r.$1,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      r.$2,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                    ),
+                    trailing: isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF6366F1),
+                            ),
+                          )
+                        : const Icon(
+                            Icons.chevron_right,
+                            size: 20,
+                            color: Color(0xFF9CA3AF),
+                          ),
+                    onTap: isSubmitting
+                        ? null
+                        : () async {
+                            setSheetState(() => isSubmitting = true);
+                            final res = await widget.service.reportPost(
+                              widget.post.id,
+                              reason: r.$1,
+                            );
+                            if (!mounted) return;
+                            // Guard context use after async gap
+                            if (bCtx.mounted) Navigator.pop(bCtx);
+                            if (res.isSuccess) {
+                              _showToast(
+                                'Thank you for your report. Our team will review this post.',
+                              );
+                            } else {
+                              _showToast(
+                                res.error ??
+                                    'Could not submit report. Please try again.',
+                                isError: true,
+                              );
+                            }
+                          },
+                  ),
+                ),
                 const SizedBox(height: 12),
               ],
             ),
@@ -1451,7 +1731,8 @@ class _PostCardState extends State<_PostCard>
   // Called from BOTH the bottom action bar and the 3-dot share menu option.
   // Records to backend post_shares table and increments share count.
   Future<void> _handleShare() async {
-    final text = '📌 ${widget.post.authorName} on SmartGali:\n"${widget.post.content}"\n\nhttps://smartgali.com/post/${widget.post.id}';
+    final text =
+        '📌 ${widget.post.authorName} on SmartGali:\n"${widget.post.content}"\n\nhttps://smartgali.com/post/${widget.post.id}';
     try {
       final result = await SharePlus.instance.share(ShareParams(text: text));
       if (result.status == ShareResultStatus.success) {
@@ -1473,7 +1754,6 @@ class _PostCardState extends State<_PostCard>
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final hasMedia = widget.post.hasMedia;
@@ -1494,15 +1774,39 @@ class _PostCardState extends State<_PostCard>
               children: [
                 GestureDetector(
                   onTap: widget.post.authorUserId != null
-                      ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: widget.post.authorUserId!, userName: widget.post.authorUserName ?? widget.post.authorName, fullName: widget.post.authorName, avatarUrl: widget.post.authorAvatarUrl)))
+                      ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(
+                              userId: widget.post.authorUserId!,
+                              userName:
+                                  widget.post.authorUserName ??
+                                  widget.post.authorName,
+                              fullName: widget.post.authorName,
+                              avatarUrl: widget.post.authorAvatarUrl,
+                            ),
+                          ),
+                        )
                       : null,
                   child: CircleAvatar(
                     radius: 21,
                     backgroundColor: _avatarColor(widget.post.authorName),
-                    backgroundImage: widget.post.authorAvatarUrl != null && widget.post.authorAvatarUrl!.isNotEmpty
-                        ? NetworkImage(widget.post.authorAvatarUrl!) : null,
-                    child: widget.post.authorAvatarUrl == null || widget.post.authorAvatarUrl!.isEmpty
-                        ? Text(_initials(widget.post.authorName), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))
+                    backgroundImage:
+                        widget.post.authorAvatarUrl != null &&
+                            widget.post.authorAvatarUrl!.isNotEmpty
+                        ? NetworkImage(widget.post.authorAvatarUrl!)
+                        : null,
+                    child:
+                        widget.post.authorAvatarUrl == null ||
+                            widget.post.authorAvatarUrl!.isEmpty
+                        ? Text(
+                            _initials(widget.post.authorName),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          )
                         : null,
                   ),
                 ),
@@ -1516,51 +1820,120 @@ class _PostCardState extends State<_PostCard>
                           Flexible(
                             child: Text(
                               widget.post.authorName,
-                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, color: Color(0xFF111827)),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14.5,
+                                color: Color(0xFF111827),
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           if (widget.post.isPinned) ...[
                             const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1.5,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFEEF2FF),
                                 borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: const Color(0xFFC7D2FE), width: 0.5),
+                                border: Border.all(
+                                  color: const Color(0xFFC7D2FE),
+                                  width: 0.5,
+                                ),
                               ),
                               child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.push_pin, size: 10, color: Color(0xFF6366F1)),
+                                  Icon(
+                                    Icons.push_pin,
+                                    size: 10,
+                                    color: Color(0xFF6366F1),
+                                  ),
                                   SizedBox(width: 2),
-                                  Text('Pinned', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF6366F1))),
+                                  Text(
+                                    'Pinned',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF6366F1),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
                           ],
                         ],
                       ),
-                      Row(children: [
-                        Text(widget.formatTime(widget.post.createdAt), style: const TextStyle(fontSize: 11.5, color: Color(0xFF9CA3AF))),
-                        if (widget.post.isEdited) ...[
+                      Row(
+                        children: [
+                          Text(
+                            widget.formatTime(widget.post.createdAt),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: Color(0xFF9CA3AF),
+                            ),
+                          ),
+                          if (widget.post.isEdited) ...[
+                            const SizedBox(width: 4),
+                            const Text(
+                              '· edited',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF9CA3AF),
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
                           const SizedBox(width: 4),
-                          const Text('· edited', style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF), fontStyle: FontStyle.italic)),
+                          Icon(
+                            widget.post.visibility == 'private'
+                                ? Icons.lock_outline
+                                : (widget.post.visibility == 'followers'
+                                      ? Icons.group_outlined
+                                      : Icons.public),
+                            size: 11,
+                            color: const Color(0xFF9CA3AF),
+                          ),
+                          if (widget.post.locationName != null &&
+                              widget.post.locationName!.isNotEmpty) ...[
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.location_on,
+                              size: 11,
+                              color: Color(0xFFEF4444),
+                            ),
+                            Text(
+                              widget.post.locationName!,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          ],
                         ],
-                        const SizedBox(width: 4),
-                        Icon(
-                          widget.post.visibility == 'private'
-                              ? Icons.lock_outline
-                              : (widget.post.visibility == 'followers' ? Icons.group_outlined : Icons.public),
-                          size: 11,
-                          color: const Color(0xFF9CA3AF),
+                      ),
+                      if (widget.post.communityName != null)
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF5EE),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'Community · ${widget.post.communityName}',
+                            style: const TextStyle(
+                              color: Color(0xFFFF6B00),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                        if (widget.post.locationName != null && widget.post.locationName!.isNotEmpty) ...[
-                          const SizedBox(width: 4),
-                          const Icon(Icons.location_on, size: 11, color: Color(0xFFEF4444)),
-                          Text(widget.post.locationName!, style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
-                        ],
-                      ]),
                     ],
                   ),
                 ),
@@ -1580,9 +1953,15 @@ class _PostCardState extends State<_PostCard>
               padding: EdgeInsets.fromLTRB(12, 0, 12, hasMedia ? 8 : 0),
               child: Text(
                 widget.post.content,
-                style: const TextStyle(color: Color(0xFF1F2937), fontSize: 15, height: 1.5),
+                style: const TextStyle(
+                  color: Color(0xFF1F2937),
+                  fontSize: 15,
+                  height: 1.5,
+                ),
                 maxLines: hasMedia ? 3 : null,
-                overflow: hasMedia ? TextOverflow.ellipsis : TextOverflow.visible,
+                overflow: hasMedia
+                    ? TextOverflow.ellipsis
+                    : TextOverflow.visible,
               ),
             ),
 
@@ -1597,19 +1976,47 @@ class _PostCardState extends State<_PostCard>
                 if (_likeCount > 0) ...[
                   Container(
                     padding: const EdgeInsets.all(3),
-                    decoration: const BoxDecoration(color: Color(0xFF6366F1), shape: BoxShape.circle),
-                    child: const Icon(Icons.thumb_up, size: 9, color: Colors.white),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF6366F1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.thumb_up,
+                      size: 9,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(width: 4),
-                  Text('$_likeCount', style: const TextStyle(fontSize: 12.5, color: Color(0xFF6B7280))),
+                  Text(
+                    '$_likeCount',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
                 ],
                 const Spacer(),
                 if (_commentCount > 0)
-                  Text('$_commentCount comment${_commentCount == 1 ? '' : 's'}', style: const TextStyle(fontSize: 12.5, color: Color(0xFF6B7280))),
+                  Text(
+                    '$_commentCount comment${_commentCount == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
                 if (_commentCount > 0 && _shareCount > 0)
-                  const Text('  ·  ', style: TextStyle(fontSize: 12.5, color: Color(0xFF6B7280))),
+                  const Text(
+                    '  ·  ',
+                    style: TextStyle(fontSize: 12.5, color: Color(0xFF6B7280)),
+                  ),
                 if (_shareCount > 0)
-                  Text('$_shareCount share${_shareCount == 1 ? '' : 's'}', style: const TextStyle(fontSize: 12.5, color: Color(0xFF6B7280))),
+                  Text(
+                    '$_shareCount share${_shareCount == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1634,17 +2041,23 @@ class _PostCardState extends State<_PostCard>
                       icon: Icon(
                         _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
                         size: 18,
-                        color: _isLiked ? const Color(0xFF6366F1) : const Color(0xFF6B7280),
+                        color: _isLiked
+                            ? const Color(0xFF6366F1)
+                            : const Color(0xFF6B7280),
                       ),
                       label: Text(
                         'Like',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: _isLiked ? const Color(0xFF6366F1) : const Color(0xFF6B7280),
+                          color: _isLiked
+                              ? const Color(0xFF6366F1)
+                              : const Color(0xFF6B7280),
                         ),
                       ),
-                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 6)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                      ),
                     ),
                   ),
                 ),
@@ -1655,7 +2068,9 @@ class _PostCardState extends State<_PostCard>
                         ? () {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Comments are turned off for this post'),
+                                content: Text(
+                                  'Comments are turned off for this post',
+                                ),
                                 behavior: SnackBarBehavior.floating,
                                 duration: Duration(seconds: 2),
                               ),
@@ -1669,17 +2084,23 @@ class _PostCardState extends State<_PostCard>
                           ? Icons.comments_disabled_outlined
                           : Icons.chat_bubble_outline_rounded,
                       size: 18,
-                      color: widget.post.commentsDisabled ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280),
+                      color: widget.post.commentsDisabled
+                          ? const Color(0xFF9CA3AF)
+                          : const Color(0xFF6B7280),
                     ),
                     label: Text(
                       widget.post.commentsDisabled ? 'Off' : 'Comment',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: widget.post.commentsDisabled ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280),
+                        color: widget.post.commentsDisabled
+                            ? const Color(0xFF9CA3AF)
+                            : const Color(0xFF6B7280),
                       ),
                     ),
-                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 6)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                    ),
                   ),
                 ),
                 // Save
@@ -1689,17 +2110,23 @@ class _PostCardState extends State<_PostCard>
                     icon: Icon(
                       _isSaved ? Icons.bookmark : Icons.bookmark_border,
                       size: 18,
-                      color: _isSaved ? const Color(0xFF10B981) : const Color(0xFF6B7280),
+                      color: _isSaved
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFF6B7280),
                     ),
                     label: Text(
                       _isSaved ? 'Saved' : 'Save',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: _isSaved ? const Color(0xFF10B981) : const Color(0xFF6B7280),
+                        color: _isSaved
+                            ? const Color(0xFF10B981)
+                            : const Color(0xFF6B7280),
                       ),
                     ),
-                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 6)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                    ),
                   ),
                 ),
                 // Share
@@ -1713,9 +2140,22 @@ class _PostCardState extends State<_PostCard>
                         });
                       }
                     },
-                    icon: const Icon(Icons.reply_rounded, size: 18, color: Color(0xFF6B7280)),
-                    label: const Text('Share', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
-                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 6)),
+                    icon: const Icon(
+                      Icons.reply_rounded,
+                      size: 18,
+                      color: Color(0xFF6B7280),
+                    ),
+                    label: const Text(
+                      'Share',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                    ),
                   ),
                 ),
               ],
@@ -1725,7 +2165,6 @@ class _PostCardState extends State<_PostCard>
       ),
     );
   }
-
 
   // ── Safe initial letter for avatar ──────────────────────────────
   String _initials(dynamic name) {
@@ -1747,8 +2186,6 @@ class _PostCardState extends State<_PostCard>
     return colors[idx];
   }
 }
-
-
 
 // ── Comments Bottom Sheet ─────────────────────────────────────────────────────
 class _CommentsSheet extends StatefulWidget {
@@ -2196,11 +2633,6 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
   }
 }
 
-
-
-
-
-
 // ── Facebook-style Media Section ─────────────────────────────────────────────
 class _MediaSection extends StatelessWidget {
   final FeedPost post;
@@ -2236,9 +2668,21 @@ class _MediaSection extends StatelessWidget {
     if (allMedia.length == 2) {
       return Row(
         children: [
-          Expanded(child: _MediaTile(url: allMedia[0], height: 200, isVideo: FeedPost.isVideoUrl(allMedia[0]))),
+          Expanded(
+            child: _MediaTile(
+              url: allMedia[0],
+              height: 200,
+              isVideo: FeedPost.isVideoUrl(allMedia[0]),
+            ),
+          ),
           const SizedBox(width: 2),
-          Expanded(child: _MediaTile(url: allMedia[1], height: 200, isVideo: FeedPost.isVideoUrl(allMedia[1]))),
+          Expanded(
+            child: _MediaTile(
+              url: allMedia[1],
+              height: 200,
+              isVideo: FeedPost.isVideoUrl(allMedia[1]),
+            ),
+          ),
         ],
       );
     }
@@ -2247,15 +2691,30 @@ class _MediaSection extends StatelessWidget {
     if (allMedia.length == 3) {
       return Row(
         children: [
-          Expanded(flex: 2, child: _MediaTile(url: allMedia[0], height: 200, isVideo: FeedPost.isVideoUrl(allMedia[0]))),
+          Expanded(
+            flex: 2,
+            child: _MediaTile(
+              url: allMedia[0],
+              height: 200,
+              isVideo: FeedPost.isVideoUrl(allMedia[0]),
+            ),
+          ),
           const SizedBox(width: 2),
           Expanded(
             flex: 1,
             child: Column(
               children: [
-                _MediaTile(url: allMedia[1], height: 99, isVideo: FeedPost.isVideoUrl(allMedia[1])),
+                _MediaTile(
+                  url: allMedia[1],
+                  height: 99,
+                  isVideo: FeedPost.isVideoUrl(allMedia[1]),
+                ),
                 const SizedBox(height: 2),
-                _MediaTile(url: allMedia[2], height: 99, isVideo: FeedPost.isVideoUrl(allMedia[2])),
+                _MediaTile(
+                  url: allMedia[2],
+                  height: 99,
+                  isVideo: FeedPost.isVideoUrl(allMedia[2]),
+                ),
               ],
             ),
           ),
@@ -2268,20 +2727,42 @@ class _MediaSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(child: _MediaTile(url: allMedia[0], height: 150, isVideo: FeedPost.isVideoUrl(allMedia[0]))),
+            Expanded(
+              child: _MediaTile(
+                url: allMedia[0],
+                height: 150,
+                isVideo: FeedPost.isVideoUrl(allMedia[0]),
+              ),
+            ),
             const SizedBox(width: 2),
-            Expanded(child: _MediaTile(url: allMedia[1], height: 150, isVideo: FeedPost.isVideoUrl(allMedia[1]))),
+            Expanded(
+              child: _MediaTile(
+                url: allMedia[1],
+                height: 150,
+                isVideo: FeedPost.isVideoUrl(allMedia[1]),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 2),
         Row(
           children: [
-            Expanded(child: _MediaTile(url: allMedia[2], height: 150, isVideo: FeedPost.isVideoUrl(allMedia[2]))),
+            Expanded(
+              child: _MediaTile(
+                url: allMedia[2],
+                height: 150,
+                isVideo: FeedPost.isVideoUrl(allMedia[2]),
+              ),
+            ),
             const SizedBox(width: 2),
             Expanded(
               child: Stack(
                 children: [
-                  _MediaTile(url: allMedia[3], height: 150, isVideo: FeedPost.isVideoUrl(allMedia[3])),
+                  _MediaTile(
+                    url: allMedia[3],
+                    height: 150,
+                    isVideo: FeedPost.isVideoUrl(allMedia[3]),
+                  ),
                   if (allMedia.length > 4)
                     Positioned.fill(
                       child: Container(
@@ -2335,21 +2816,23 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer> {
     _hasError = false;
     _initialized = false;
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
-      ..initialize().then((_) {
-        if (mounted) {
-          setState(() {
-            _initialized = true;
+      ..initialize()
+          .then((_) {
+            if (mounted) {
+              setState(() {
+                _initialized = true;
+              });
+              _controller.setLooping(true);
+              _controller.addListener(_videoListener);
+            }
+          })
+          .catchError((_) {
+            if (mounted) {
+              setState(() {
+                _hasError = true;
+              });
+            }
           });
-          _controller.setLooping(true);
-          _controller.addListener(_videoListener);
-        }
-      }).catchError((_) {
-        if (mounted) {
-          setState(() {
-            _hasError = true;
-          });
-        }
-      });
   }
 
   void _videoListener() {
@@ -2449,13 +2932,23 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.videocam_off_outlined, color: Colors.white70, size: 40),
+              const Icon(
+                Icons.videocam_off_outlined,
+                color: Colors.white70,
+                size: 40,
+              ),
               const SizedBox(height: 8),
-              const Text('Unable to load video', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              const Text(
+                'Unable to load video',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
               const SizedBox(height: 8),
               TextButton(
                 onPressed: _initPlayer,
-                child: const Text('Retry', style: TextStyle(color: Color(0xFF818CF8))),
+                child: const Text(
+                  'Retry',
+                  style: TextStyle(color: Color(0xFF818CF8)),
+                ),
               ),
             ],
           ),
@@ -2467,7 +2960,10 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer> {
       return Container(
         color: const Color(0xFF0F172A),
         child: const Center(
-          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6366F1)),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Color(0xFF6366F1),
+          ),
         ),
       );
     }
@@ -2491,7 +2987,9 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer> {
             // Video surface
             Center(
               child: AspectRatio(
-                aspectRatio: value.aspectRatio > 0 ? value.aspectRatio : (16 / 9),
+                aspectRatio: value.aspectRatio > 0
+                    ? value.aspectRatio
+                    : (16 / 9),
                 child: VideoPlayer(_controller),
               ),
             ),
@@ -2554,7 +3052,9 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer> {
                             child: Icon(
                               isEnded
                                   ? Icons.replay_rounded
-                                  : (isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                                  : (isPlaying
+                                        ? Icons.pause_rounded
+                                        : Icons.play_arrow_rounded),
                               color: Colors.white,
                               size: 36,
                             ),
@@ -2580,7 +3080,9 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer> {
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
-                                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                  isPlaying
+                                      ? Icons.pause_rounded
+                                      : Icons.play_arrow_rounded,
                                   color: Colors.white,
                                   size: 18,
                                 ),
@@ -2609,7 +3111,9 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer> {
                                   child: VideoProgressIndicator(
                                     _controller,
                                     allowScrubbing: true,
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 8,
+                                    ),
                                     colors: const VideoProgressColors(
                                       playedColor: Color(0xFF6366F1),
                                       bufferedColor: Colors.white38,
@@ -2631,7 +3135,9 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer> {
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
-                                  _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                                  _isMuted
+                                      ? Icons.volume_off_rounded
+                                      : Icons.volume_up_rounded,
                                   color: Colors.white,
                                   size: 18,
                                 ),
@@ -2685,7 +3191,8 @@ class _MediaTile extends StatelessWidget {
                   child: Center(
                     child: CircularProgressIndicator(
                       value: progress.expectedTotalBytes != null
-                          ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                          ? progress.cumulativeBytesLoaded /
+                                progress.expectedTotalBytes!
                           : null,
                       strokeWidth: 2,
                       color: const Color(0xFF6366F1),
@@ -2696,7 +3203,11 @@ class _MediaTile extends StatelessWidget {
               errorBuilder: (_, _, _) => Container(
                 color: const Color(0xFFF3F4F6),
                 child: const Center(
-                  child: Icon(Icons.broken_image_outlined, color: Color(0xFFD1D5DB), size: 40),
+                  child: Icon(
+                    Icons.broken_image_outlined,
+                    color: Color(0xFFD1D5DB),
+                    size: 40,
+                  ),
                 ),
               ),
             ),
@@ -2719,7 +3230,8 @@ class _ShareOptionsBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<_ShareOptionsBottomSheet> createState() => _ShareOptionsBottomSheetState();
+  State<_ShareOptionsBottomSheet> createState() =>
+      _ShareOptionsBottomSheetState();
 }
 
 class _ShareOptionsBottomSheetState extends State<_ShareOptionsBottomSheet> {
@@ -2767,7 +3279,11 @@ class _ShareOptionsBottomSheetState extends State<_ShareOptionsBottomSheet> {
   }
 
   Future<void> _sendToChat(ChatModel chat) async {
-    if (_userId == null || _sentChatIds.contains(chat.id) || _sendingChatIds.contains(chat.id)) return;
+    if (_userId == null ||
+        _sentChatIds.contains(chat.id) ||
+        _sendingChatIds.contains(chat.id)) {
+      return;
+    }
     setState(() {
       _sendingChatIds.add(chat.id);
     });
@@ -2786,7 +3302,9 @@ class _ShareOptionsBottomSheetState extends State<_ShareOptionsBottomSheet> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Shared to ${chat.name ?? chat.otherUserName ?? "chat"}!'),
+            content: Text(
+              'Shared to ${chat.name ?? chat.otherUserName ?? "chat"}!',
+            ),
             backgroundColor: const Color(0xFF10B981),
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 2),
@@ -2880,7 +3398,11 @@ class _ShareOptionsBottomSheetState extends State<_ShareOptionsBottomSheet> {
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, color: Color(0xFF6B7280), size: 22),
+                  icon: const Icon(
+                    Icons.close,
+                    color: Color(0xFF6B7280),
+                    size: 22,
+                  ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
@@ -2912,7 +3434,11 @@ class _ShareOptionsBottomSheetState extends State<_ShareOptionsBottomSheet> {
                             widget.post.authorName.isNotEmpty
                                 ? widget.post.authorName[0].toUpperCase()
                                 : 'U',
-                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
                           )
                         : null,
                   ),
@@ -2923,7 +3449,10 @@ class _ShareOptionsBottomSheetState extends State<_ShareOptionsBottomSheet> {
                       children: [
                         Text(
                           widget.post.authorName,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -2931,7 +3460,10 @@ class _ShareOptionsBottomSheetState extends State<_ShareOptionsBottomSheet> {
                           const SizedBox(height: 2),
                           Text(
                             widget.post.content.trim(),
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF4B5563),
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -2949,7 +3481,11 @@ class _ShareOptionsBottomSheetState extends State<_ShareOptionsBottomSheet> {
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
             child: Row(
               children: const [
-                Icon(Icons.chat_bubble_outline_rounded, size: 16, color: Color(0xFF10B981)),
+                Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 16,
+                  color: Color(0xFF10B981),
+                ),
                 SizedBox(width: 6),
                 Text(
                   'Send in Direct Chat',
@@ -2971,9 +3507,19 @@ class _ShareOptionsBottomSheetState extends State<_ShareOptionsBottomSheet> {
                 onChanged: (val) => setState(() => _searchQuery = val),
                 decoration: InputDecoration(
                   hintText: 'Search contacts...',
-                  hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                  prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF9CA3AF)),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                  hintStyle: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 18,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 0,
+                    horizontal: 12,
+                  ),
                   filled: true,
                   fillColor: const Color(0xFFF9FAFB),
                   border: OutlineInputBorder(
@@ -2993,91 +3539,133 @@ class _ShareOptionsBottomSheetState extends State<_ShareOptionsBottomSheet> {
             child: _isLoadingChats
                 ? const SizedBox(
                     height: 80,
-                    child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF10B981))),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF10B981),
+                      ),
+                    ),
                   )
                 : _chats.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        child: Text(
-                          'No recent chats found',
-                          style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-                        ),
-                      )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: filteredChats.length,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        itemBuilder: (ctx, idx) {
-                          final chat = filteredChats[idx];
-                          final name = chat.name ?? chat.otherUserName ?? 'Chat #${chat.id}';
-                          final isSent = _sentChatIds.contains(chat.id);
-                          final isSending = _sendingChatIds.contains(chat.id);
-
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: const Color(0xFF6366F1),
-                                  backgroundImage: chat.avatarUrl != null ? NetworkImage(chat.avatarUrl!) : null,
-                                  child: chat.avatarUrl == null
-                                      ? Text(
-                                          name.isNotEmpty ? name[0].toUpperCase() : 'C',
-                                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                                        )
-                                      : null,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        name,
-                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1F2937)),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      if (chat.lastMessage != null && chat.lastMessage!.isNotEmpty)
-                                        Text(
-                                          chat.lastMessage!,
-                                          style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                SizedBox(
-                                  height: 32,
-                                  child: ElevatedButton(
-                                    onPressed: (isSent || isSending) ? null : () => _sendToChat(chat),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: isSent ? const Color(0xFF10B981) : const Color(0xFF6366F1),
-                                      foregroundColor: Colors.white,
-                                      elevation: 0,
-                                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    ),
-                                    child: isSending
-                                        ? const SizedBox(
-                                            width: 14,
-                                            height: 14,
-                                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                          )
-                                        : Text(
-                                            isSent ? 'Sent ✓' : 'Send',
-                                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                          ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Text(
+                      'No recent chats found',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade500,
                       ),
+                    ),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: filteredChats.length,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    itemBuilder: (ctx, idx) {
+                      final chat = filteredChats[idx];
+                      final name =
+                          chat.name ?? chat.otherUserName ?? 'Chat #${chat.id}';
+                      final isSent = _sentChatIds.contains(chat.id);
+                      final isSending = _sendingChatIds.contains(chat.id);
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundColor: const Color(0xFF6366F1),
+                              backgroundImage: chat.avatarUrl != null
+                                  ? NetworkImage(chat.avatarUrl!)
+                                  : null,
+                              child: chat.avatarUrl == null
+                                  ? Text(
+                                      name.isNotEmpty
+                                          ? name[0].toUpperCase()
+                                          : 'C',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    name,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1F2937),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (chat.lastMessage != null &&
+                                      chat.lastMessage!.isNotEmpty)
+                                    Text(
+                                      chat.lastMessage!,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF9CA3AF),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              height: 32,
+                              child: ElevatedButton(
+                                onPressed: (isSent || isSending)
+                                    ? null
+                                    : () => _sendToChat(chat),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isSent
+                                      ? const Color(0xFF10B981)
+                                      : const Color(0xFF6366F1),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: isSending
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Text(
+                                        isSent ? 'Sent ✓' : 'Send',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
 
           const SizedBox(height: 8),
@@ -3092,15 +3680,25 @@ class _ShareOptionsBottomSheetState extends State<_ShareOptionsBottomSheet> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: _basicShare,
-                    icon: const Icon(Icons.share_outlined, size: 18, color: Color(0xFF1F2937)),
+                    icon: const Icon(
+                      Icons.share_outlined,
+                      size: 18,
+                      color: Color(0xFF1F2937),
+                    ),
                     label: const Text(
                       'Share via...',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1F2937)),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2937),
+                      ),
                     ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       side: BorderSide(color: Colors.grey.shade300),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -3109,16 +3707,26 @@ class _ShareOptionsBottomSheetState extends State<_ShareOptionsBottomSheet> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: _copyLink,
-                    icon: const Icon(Icons.copy_rounded, size: 18, color: Colors.white),
+                    icon: const Icon(
+                      Icons.copy_rounded,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                     label: const Text(
                       'Copy Link',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF10B981),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -3152,10 +3760,7 @@ class _PostContextMenuSheet extends StatelessWidget {
   final FeedPost post;
   final bool isAuthor;
 
-  const _PostContextMenuSheet({
-    required this.post,
-    required this.isAuthor,
-  });
+  const _PostContextMenuSheet({required this.post, required this.isAuthor});
 
   String get _privacyLabel {
     if (post.visibility == 'private') return 'Only Me (Private)';
@@ -3181,7 +3786,10 @@ class _PostContextMenuSheet extends StatelessWidget {
                   margin: const EdgeInsets.only(top: 10, bottom: 6),
                   width: 36,
                   height: 4,
-                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
 
@@ -3194,31 +3802,46 @@ class _PostContextMenuSheet extends StatelessWidget {
                   onTap: () => Navigator.pop(context, _ContextMenuAction.edit),
                 ),
                 _ContextMenuTile(
-                  icon: post.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                  icon: post.isPinned
+                      ? Icons.push_pin
+                      : Icons.push_pin_outlined,
                   title: post.isPinned ? 'Unpin from Top' : 'Pin to Profile',
-                  subtitle: post.isPinned ? 'Remove from top of profile' : 'Keep at the top of your profile',
+                  subtitle: post.isPinned
+                      ? 'Remove from top of profile'
+                      : 'Keep at the top of your profile',
                   onTap: () => Navigator.pop(context, _ContextMenuAction.pin),
                 ),
                 _ContextMenuTile(
-                  icon: post.commentsDisabled ? Icons.chat_bubble_outline : Icons.comments_disabled_outlined,
-                  title: post.commentsDisabled ? 'Turn On Comments' : 'Turn Off Comments',
-                  subtitle: post.commentsDisabled ? 'Allow users to comment' : 'Disable new comments on this post',
-                  onTap: () => Navigator.pop(context, _ContextMenuAction.toggleComments),
+                  icon: post.commentsDisabled
+                      ? Icons.chat_bubble_outline
+                      : Icons.comments_disabled_outlined,
+                  title: post.commentsDisabled
+                      ? 'Turn On Comments'
+                      : 'Turn Off Comments',
+                  subtitle: post.commentsDisabled
+                      ? 'Allow users to comment'
+                      : 'Disable new comments on this post',
+                  onTap: () =>
+                      Navigator.pop(context, _ContextMenuAction.toggleComments),
                 ),
                 _ContextMenuTile(
                   icon: Icons.analytics_outlined,
                   title: 'View Insights & Analytics',
                   subtitle: 'See total reach, likes, comments, and shares',
-                  onTap: () => Navigator.pop(context, _ContextMenuAction.insights),
+                  onTap: () =>
+                      Navigator.pop(context, _ContextMenuAction.insights),
                 ),
                 _ContextMenuTile(
                   icon: Icons.lock_outline,
                   title: 'Audience / Privacy',
                   subtitle: 'Currently: $_privacyLabel',
-                  onTap: () => Navigator.pop(context, _ContextMenuAction.privacy),
+                  onTap: () =>
+                      Navigator.pop(context, _ContextMenuAction.privacy),
                 ),
                 _ContextMenuTile(
-                  icon: post.isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                  icon: post.isSaved
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_border_rounded,
                   title: post.isSaved ? 'Remove from Saved' : 'Save Post',
                   subtitle: 'Bookmark for your personal collection',
                   onTap: () => Navigator.pop(context, _ContextMenuAction.save),
@@ -3226,7 +3849,8 @@ class _PostContextMenuSheet extends StatelessWidget {
                 _ContextMenuTile(
                   icon: Icons.link_rounded,
                   title: 'Copy Post Link',
-                  onTap: () => Navigator.pop(context, _ContextMenuAction.copyLink),
+                  onTap: () =>
+                      Navigator.pop(context, _ContextMenuAction.copyLink),
                 ),
                 const Divider(height: 1),
                 _ContextMenuTile(
@@ -3234,27 +3858,35 @@ class _PostContextMenuSheet extends StatelessWidget {
                   title: 'Delete Post',
                   subtitle: 'Delete permanently with confirmation',
                   isDestructive: true,
-                  onTap: () => Navigator.pop(context, _ContextMenuAction.delete),
+                  onTap: () =>
+                      Navigator.pop(context, _ContextMenuAction.delete),
                 ),
               ] else ...[
                 // ── VIEWER ACTIONS (Doosre Ka Post) ──
                 _ContextMenuTile(
-                  icon: post.isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                  icon: post.isSaved
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_border_rounded,
                   title: post.isSaved ? 'Remove from Saved' : 'Save Post',
-                  subtitle: post.isSaved ? 'Remove from your bookmarks' : 'Save to your private bookmarks',
+                  subtitle: post.isSaved
+                      ? 'Remove from your bookmarks'
+                      : 'Save to your private bookmarks',
                   onTap: () => Navigator.pop(context, _ContextMenuAction.save),
                 ),
                 if (post.authorUserId != null)
                   _ContextMenuTile(
                     icon: Icons.person_remove_outlined,
-                    title: 'Unfollow @${post.authorUserName ?? post.authorName}',
+                    title:
+                        'Unfollow @${post.authorUserName ?? post.authorName}',
                     subtitle: "Stop seeing posts from this user in your feed",
-                    onTap: () => Navigator.pop(context, _ContextMenuAction.unfollow),
+                    onTap: () =>
+                        Navigator.pop(context, _ContextMenuAction.unfollow),
                   ),
                 _ContextMenuTile(
                   icon: Icons.volume_off_outlined,
                   title: 'Mute @${post.authorUserName ?? post.authorName}',
-                  subtitle: "Hide future posts from this user without unfollowing",
+                  subtitle:
+                      "Hide future posts from this user without unfollowing",
                   onTap: () => Navigator.pop(context, _ContextMenuAction.mute),
                 ),
                 _ContextMenuTile(
@@ -3273,7 +3905,8 @@ class _PostContextMenuSheet extends StatelessWidget {
                 _ContextMenuTile(
                   icon: Icons.link_rounded,
                   title: 'Copy Post Link',
-                  onTap: () => Navigator.pop(context, _ContextMenuAction.copyLink),
+                  onTap: () =>
+                      Navigator.pop(context, _ContextMenuAction.copyLink),
                 ),
                 const Divider(height: 1),
                 _ContextMenuTile(
@@ -3281,7 +3914,8 @@ class _PostContextMenuSheet extends StatelessWidget {
                   title: 'Report Post',
                   subtitle: "Report spam, abuse, harassment or misinformation",
                   isDestructive: true,
-                  onTap: () => Navigator.pop(context, _ContextMenuAction.report),
+                  onTap: () =>
+                      Navigator.pop(context, _ContextMenuAction.report),
                 ),
               ],
               const SizedBox(height: 10),
@@ -3310,7 +3944,9 @@ class _ContextMenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive ? const Color(0xFFEF4444) : const Color(0xFF1F2937);
+    final color = isDestructive
+        ? const Color(0xFFEF4444)
+        : const Color(0xFF1F2937);
 
     return InkWell(
       onTap: onTap,
@@ -3336,7 +3972,10 @@ class _ContextMenuTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle!,
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF9CA3AF),
+                      ),
                     ),
                   ],
                 ],
@@ -3375,14 +4014,25 @@ class _InsightItem extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(width: 12),
-          Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF4B5563))),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF4B5563),
+            ),
+          ),
           const Spacer(),
-          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF111827))),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF111827),
+            ),
+          ),
         ],
       ),
     );
   }
 }
-
-
-

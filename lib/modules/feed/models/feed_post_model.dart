@@ -4,7 +4,7 @@ class FeedPost {
   final int id;
   String content;
   final String? mediaUrl;
-  final List<FeedMedia> mediaUrls;  // multi-image support
+  final List<FeedMedia> mediaUrls; // multi-image support
   int likesCount;
   int commentsCount;
   bool isLikedByMe;
@@ -21,6 +21,9 @@ class FeedPost {
   bool isEdited;
   String visibility;
   final String? locationName;
+  final int? communityId;
+  final String? communityName;
+  final String? communityCoverImage;
 
   FeedPost({
     required this.id,
@@ -43,6 +46,9 @@ class FeedPost {
     this.isEdited = false,
     this.visibility = 'public',
     this.locationName,
+    this.communityId,
+    this.communityName,
+    this.communityCoverImage,
   });
 
   // Returns true if this post has any media
@@ -59,7 +65,8 @@ class FeedPost {
   bool get isVideo =>
       postType == 'video' ||
       (effectiveMediaUrl != null && isVideoUrl(effectiveMediaUrl!)) ||
-      (mediaUrls.isNotEmpty && mediaUrls.any((m) => m.type == 'video' || isVideoUrl(m.url)));
+      (mediaUrls.isNotEmpty &&
+          mediaUrls.any((m) => m.type == 'video' || isVideoUrl(m.url)));
 
   static bool isVideoUrl(String url) {
     final lower = url.toLowerCase().split('?').first;
@@ -116,19 +123,24 @@ class FeedPost {
           final rawUrl = m['url']?.toString() ?? m['media_url']?.toString();
           final url = ApiConfig.normalizeMediaUrl(rawUrl);
           if (url != null && url.isNotEmpty) {
-            final mediaType = _safeString(m['type'], isVideoUrl(url) ? 'video' : 'image');
-            mediaUrlsList.add(FeedMedia(
-              id: _safeInt(m['id'], 0),
-              url: url,
-              type: mediaType,
-            ));
+            final mediaType = _safeString(
+              m['type'],
+              isVideoUrl(url) ? 'video' : 'image',
+            );
+            mediaUrlsList.add(
+              FeedMedia(id: _safeInt(m['id'], 0), url: url, type: mediaType),
+            );
           }
         }
       }
     }
 
-    final rawPrimaryMedia = json['mediaUrl']?.toString() ?? json['media_url']?.toString();
+    final rawPrimaryMedia =
+        json['mediaUrl']?.toString() ?? json['media_url']?.toString();
     final primaryMediaUrl = ApiConfig.normalizeMediaUrl(rawPrimaryMedia);
+    final community = json['community'] is Map
+        ? json['community'] as Map
+        : null;
 
     return FeedPost(
       id: _safeInt(json['id'], 0),
@@ -147,10 +159,21 @@ class FeedPost {
       authorUserId: authorUserId,
       authorUserName: authorUserName,
       isPinned: _safeBool(json['isPinned'] ?? json['is_pinned'], false),
-      commentsDisabled: _safeBool(json['commentsDisabled'] ?? json['comments_disabled'], false),
+      commentsDisabled: _safeBool(
+        json['commentsDisabled'] ?? json['comments_disabled'],
+        false,
+      ),
       isEdited: _safeBool(json['isEdited'] ?? json['is_edited'], false),
       visibility: _safeString(json['visibility'], 'public'),
-      locationName: json['locationName']?.toString() ?? json['location_name']?.toString(),
+      locationName:
+          json['locationName']?.toString() ?? json['location_name']?.toString(),
+      communityId: _safeInt(json['communityId'] ?? community?['id'], 0) == 0
+          ? null
+          : _safeInt(json['communityId'] ?? community?['id'], 0),
+      communityName: community?['name']?.toString(),
+      communityCoverImage: ApiConfig.normalizeMediaUrl(
+        community?['coverImage']?.toString(),
+      ),
     );
   }
 }

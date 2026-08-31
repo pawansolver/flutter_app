@@ -61,15 +61,19 @@ class FeedService {
     List<int>? mediaIds,
     String? type,
     String? visibility,
+    int? communityId,
   }) async {
     try {
       final resp = await _dio.post(
-        '$_base/post',
+        communityId == null
+            ? '$_base/post'
+            : ApiConfig.communityFeed(communityId),
         data: {
           'content': content,
           if (mediaIds != null && mediaIds.isNotEmpty) 'mediaIds': mediaIds,
           if (type != null) 'type': type,
-          if (visibility != null) 'visibility': visibility,
+          if (visibility != null && communityId == null)
+            'visibility': visibility,
         },
         options: await _authOptions(),
       );
@@ -146,9 +150,19 @@ class FeedService {
         options: await _authOptions(),
       );
       if (resp.statusCode == 200 && resp.data['success'] == true) {
-        final list = (resp.data['data'] as List?) ?? [];
+        final payload = resp.data['data'];
+        final list = payload is List
+            ? payload
+            : (payload is Map && payload['comments'] is List
+                  ? payload['comments'] as List
+                  : const []);
         return FeedResult.success(
-          list.map((e) => FeedComment.fromJson(e)).toList(),
+          list
+              .whereType<Map>()
+              .map(
+                (e) => FeedComment.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList(),
         );
       }
       return FeedResult.failure(
@@ -192,7 +206,8 @@ class FeedService {
         data: {'post_id': postId},
         options: await _authOptions(),
       );
-      if ((resp.statusCode == 200 || resp.statusCode == 201) && resp.data['success'] == true) {
+      if ((resp.statusCode == 200 || resp.statusCode == 201) &&
+          resp.data['success'] == true) {
         return const FeedResult.success(true);
       }
       return FeedResult.failure(resp.data['message'] ?? 'Failed to save post');
@@ -210,10 +225,13 @@ class FeedService {
         data: {'post_id': postId},
         options: await _authOptions(),
       );
-      if (resp.statusCode == 200 && resp.data['success'] == true) {
+      if ((resp.statusCode == 200 || resp.statusCode == 202) &&
+          resp.data['success'] == true) {
         return const FeedResult.success(true);
       }
-      return FeedResult.failure(resp.data['message'] ?? 'Failed to remove from saved');
+      return FeedResult.failure(
+        resp.data['message'] ?? 'Failed to remove from saved',
+      );
     } on DioException catch (e) {
       try {
         final resp2 = await _dio.delete(
@@ -231,7 +249,10 @@ class FeedService {
   }
 
   // 8c. Toggle Save Post
-  Future<FeedResult<bool>> toggleSavePost(int postId, {required bool isCurrentlySaved}) async {
+  Future<FeedResult<bool>> toggleSavePost(
+    int postId, {
+    required bool isCurrentlySaved,
+  }) async {
     if (isCurrentlySaved) {
       return unsavePost(postId);
     } else {
@@ -247,7 +268,8 @@ class FeedService {
         data: {'post_id': postId},
         options: await _authOptions(),
       );
-      if ((resp.statusCode == 200 || resp.statusCode == 201) && resp.data['success'] == true) {
+      if ((resp.statusCode == 200 || resp.statusCode == 201) &&
+          resp.data['success'] == true) {
         return const FeedResult.success(true);
       }
       return FeedResult.failure(resp.data['message'] ?? 'Failed to share post');
@@ -294,26 +316,37 @@ class FeedService {
       if (resp.statusCode == 200 && resp.data['success'] == true) {
         return const FeedResult.success(true);
       }
-      return FeedResult.failure(resp.data['message'] ?? 'Failed to delete post');
+      return FeedResult.failure(
+        resp.data['message'] ?? 'Failed to delete post',
+      );
     } on DioException catch (e) {
-      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+      return FeedResult.failure(
+        e.response?.data?['message'] ?? 'Network error',
+      );
     }
   }
 
   // 12. Report Post
-  Future<FeedResult<bool>> reportPost(int postId, {required String reason, String? details}) async {
+  Future<FeedResult<bool>> reportPost(
+    int postId, {
+    required String reason,
+    String? details,
+  }) async {
     try {
       final resp = await _dio.post(
         '$_base/post/$postId/report',
         data: {'reason': reason, if (details != null) 'details': details},
         options: await _authOptions(),
       );
-      if ((resp.statusCode == 200 || resp.statusCode == 201) && resp.data['success'] == true) {
+      if ((resp.statusCode == 200 || resp.statusCode == 201) &&
+          resp.data['success'] == true) {
         return const FeedResult.success(true);
       }
       return FeedResult.failure(resp.data['message'] ?? 'Failed to report');
     } on DioException catch (e) {
-      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+      return FeedResult.failure(
+        e.response?.data?['message'] ?? 'Network error',
+      );
     }
   }
 
@@ -329,12 +362,18 @@ class FeedService {
       }
       return FeedResult.failure(resp.data['message'] ?? 'Failed to unfollow');
     } on DioException catch (e) {
-      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+      return FeedResult.failure(
+        e.response?.data?['message'] ?? 'Network error',
+      );
     }
   }
 
   // 14. PUT Edit Post
-  Future<FeedResult<Map<String, dynamic>>> editPost(int postId, {required String content, String? visibility}) async {
+  Future<FeedResult<Map<String, dynamic>>> editPost(
+    int postId, {
+    required String content,
+    String? visibility,
+  }) async {
     try {
       final resp = await _dio.put(
         '$_base/post/$postId',
@@ -345,16 +384,25 @@ class FeedService {
         options: await _authOptions(),
       );
       if (resp.statusCode == 200 && resp.data['success'] == true) {
-        return FeedResult.success(resp.data['data'] as Map<String, dynamic>? ?? {});
+        return FeedResult.success(
+          resp.data['data'] as Map<String, dynamic>? ?? {},
+        );
       }
-      return FeedResult.failure(resp.data['message'] ?? 'Failed to update post');
+      return FeedResult.failure(
+        resp.data['message'] ?? 'Failed to update post',
+      );
     } on DioException catch (e) {
-      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+      return FeedResult.failure(
+        e.response?.data?['message'] ?? 'Network error',
+      );
     }
   }
 
   // 15. PATCH Update Post Visibility
-  Future<FeedResult<bool>> updateVisibility(int postId, String visibility) async {
+  Future<FeedResult<bool>> updateVisibility(
+    int postId,
+    String visibility,
+  ) async {
     try {
       final resp = await _dio.patch(
         '$_base/post/$postId/visibility',
@@ -364,9 +412,13 @@ class FeedService {
       if (resp.statusCode == 200 && resp.data['success'] == true) {
         return const FeedResult.success(true);
       }
-      return FeedResult.failure(resp.data['message'] ?? 'Failed to update audience');
+      return FeedResult.failure(
+        resp.data['message'] ?? 'Failed to update audience',
+      );
     } on DioException catch (e) {
-      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+      return FeedResult.failure(
+        e.response?.data?['message'] ?? 'Network error',
+      );
     }
   }
 
@@ -382,7 +434,9 @@ class FeedService {
       }
       return FeedResult.failure(resp.data['message'] ?? 'Failed to toggle pin');
     } on DioException catch (e) {
-      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+      return FeedResult.failure(
+        e.response?.data?['message'] ?? 'Network error',
+      );
     }
   }
 
@@ -396,9 +450,13 @@ class FeedService {
       if (resp.statusCode == 200 && resp.data['success'] == true) {
         return const FeedResult.success(true);
       }
-      return FeedResult.failure(resp.data['message'] ?? 'Failed to toggle comments');
+      return FeedResult.failure(
+        resp.data['message'] ?? 'Failed to toggle comments',
+      );
     } on DioException catch (e) {
-      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+      return FeedResult.failure(
+        e.response?.data?['message'] ?? 'Network error',
+      );
     }
   }
 
@@ -409,7 +467,8 @@ class FeedService {
         '$_base/user/$targetUserId/block',
         options: await _authOptions(),
       );
-      if ((resp.statusCode == 200 || resp.statusCode == 201) && resp.data['success'] == true) {
+      if ((resp.statusCode == 200 || resp.statusCode == 201) &&
+          resp.data['success'] == true) {
         return const FeedResult.success(true);
       }
       return FeedResult.failure(resp.data['message'] ?? 'Failed to block user');
@@ -420,11 +479,14 @@ class FeedService {
           data: {'targetUserId': targetUserId, 'userId': targetUserId},
           options: await _authOptions(),
         );
-        if ((resp2.statusCode == 200 || resp2.statusCode == 201) && resp2.data['success'] == true) {
+        if ((resp2.statusCode == 200 || resp2.statusCode == 201) &&
+            resp2.data['success'] == true) {
           return const FeedResult.success(true);
         }
       } catch (_) {}
-      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+      return FeedResult.failure(
+        e.response?.data?['message'] ?? 'Network error',
+      );
     }
   }
 
@@ -435,7 +497,8 @@ class FeedService {
         '$_base/user/$targetUserId/mute',
         options: await _authOptions(),
       );
-      if ((resp.statusCode == 200 || resp.statusCode == 201) && resp.data['success'] == true) {
+      if ((resp.statusCode == 200 || resp.statusCode == 201) &&
+          resp.data['success'] == true) {
         return const FeedResult.success(true);
       }
       return FeedResult.failure(resp.data['message'] ?? 'Failed to mute user');
@@ -446,11 +509,14 @@ class FeedService {
           data: {'targetUserId': targetUserId, 'userId': targetUserId},
           options: await _authOptions(),
         );
-        if ((resp2.statusCode == 200 || resp2.statusCode == 201) && resp2.data['success'] == true) {
+        if ((resp2.statusCode == 200 || resp2.statusCode == 201) &&
+            resp2.data['success'] == true) {
           return const FeedResult.success(true);
         }
       } catch (_) {}
-      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+      return FeedResult.failure(
+        e.response?.data?['message'] ?? 'Network error',
+      );
     }
   }
 
@@ -462,16 +528,24 @@ class FeedService {
         options: await _authOptions(),
       );
       if (resp.statusCode == 200 && resp.data['success'] == true) {
-        return FeedResult.success(resp.data['data'] as Map<String, dynamic>? ?? {});
+        return FeedResult.success(
+          resp.data['data'] as Map<String, dynamic>? ?? {},
+        );
       }
-      return FeedResult.failure(resp.data['message'] ?? 'Failed to load insights');
+      return FeedResult.failure(
+        resp.data['message'] ?? 'Failed to load insights',
+      );
     } on DioException catch (e) {
-      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+      return FeedResult.failure(
+        e.response?.data?['message'] ?? 'Network error',
+      );
     }
   }
 
   // 21. POST Record Batch Views (Enterprise Viewport Dwell-Time Ingestion)
-  Future<FeedResult<bool>> recordBatchViews(List<Map<String, dynamic>> views) async {
+  Future<FeedResult<bool>> recordBatchViews(
+    List<Map<String, dynamic>> views,
+  ) async {
     if (views.isEmpty) return const FeedResult.success(true);
     try {
       final resp = await _dio.post(
@@ -482,10 +556,13 @@ class FeedService {
       if (resp.statusCode == 200 && resp.data['success'] == true) {
         return const FeedResult.success(true);
       }
-      return FeedResult.failure(resp.data['message'] ?? 'Failed to record batch views');
+      return FeedResult.failure(
+        resp.data['message'] ?? 'Failed to record batch views',
+      );
     } on DioException catch (e) {
-      return FeedResult.failure(e.response?.data?['message'] ?? 'Network error');
+      return FeedResult.failure(
+        e.response?.data?['message'] ?? 'Network error',
+      );
     }
   }
-
 }
