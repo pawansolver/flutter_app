@@ -579,32 +579,43 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+          contentPadding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
           title: Row(
             children: const [
               Icon(Icons.gavel_rounded, color: Color(0xFFFF6B00)),
               SizedBox(width: 10),
-              Text('Community Guidelines'),
+              Expanded(
+                child: Text(
+                  'Community Guidelines',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (_community.rules != null && _community.rules!.isNotEmpty)
-                ..._community.rules!.asMap().entries.map((e) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      '${e.key + 1}. ${e.value}',
-                      style: const TextStyle(fontSize: 14, height: 1.3),
-                    ),
-                  );
-                })
-              else
-                const Text(
-                  '1. Be respectful to all members\n2. No spam or hate speech',
-                ),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_community.rules != null && _community.rules!.isNotEmpty)
+                  ..._community.rules!.asMap().entries.map((e) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        '${e.key + 1}. ${e.value}',
+                        style: const TextStyle(fontSize: 14, height: 1.3),
+                      ),
+                    );
+                  })
+                else
+                  const Text(
+                    '1. Be respectful to all members\n2. No spam or hate speech',
+                    style: TextStyle(fontSize: 14, height: 1.3),
+                  ),
+              ],
+            ),
           ),
           actions: [
             TextButton(

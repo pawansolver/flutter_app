@@ -11,7 +11,7 @@ class ApiConfig {
 
   /// Set this to true if testing on a REAL PHYSICAL PHONE connected via Wi-Fi.
   /// Set to false if testing on Android Emulator / Web / Desktop.
-  static const bool usePhysicalPhoneLan = false;
+  static const bool usePhysicalPhoneLan = true;
 
   /// Local Machine Wi-Fi IP (current IP: 192.168.31.15)
   static const String localLanIp = '192.168.31.15';
@@ -66,6 +66,12 @@ class ApiConfig {
 
   /// Converts relative and backend-local media URLs into a URL reachable from
   /// the current Flutter platform.
+  ///
+  /// Handles:
+  ///  - Relative paths (no scheme)   → prepend baseUrl
+  ///  - localhost / 127.0.0.1 URLs   → rewrite to current baseUrl host
+  ///  - Private LAN IPs (192.168.x, 10.x, 172.x) → rewrite to current baseUrl host
+  ///  - Release mode HTTP            → upgrade to HTTPS
   static String? normalizeMediaUrl(String? value) {
     final raw = value?.trim();
     if (raw == null || raw.isEmpty) return null;
@@ -73,19 +79,25 @@ class ApiConfig {
     final parsed = Uri.tryParse(raw);
     if (parsed == null) return raw;
 
+    // Relative path → prepend baseUrl origin
     if (!parsed.hasScheme) {
       final apiUri = Uri.parse(baseUrl);
       final path = raw.startsWith('/') ? raw : '/$raw';
       return apiUri.replace(path: path, query: null, fragment: null).toString();
     }
 
+    // Release mode: always use HTTPS
     if (kReleaseMode && parsed.scheme == 'http') {
       return parsed.replace(scheme: 'https').toString();
     }
 
-    // Rewrite localhost URLs to baseUrl because physical phones cannot access localhost.
-    // This happens if the backend misconfigures its BASE_URL env var.
-    if (parsed.host == 'localhost' || parsed.host == '127.0.0.1') {
+    // Rewrite any local/LAN addresses to the current Flutter baseUrl host.
+    // This covers:
+    //   - localhost / 127.0.0.1   (dev machine loopback)
+    //   - 192.168.x.x             (home/office Wi-Fi LAN)
+    //   - 10.x.x.x                (corporate LAN / Android emulator host)
+    //   - 172.16–31.x.x           (Docker / VPN subnets)
+    if (_isLocalAddress(parsed.host)) {
       final apiUri = Uri.parse(baseUrl);
       return parsed
           .replace(scheme: apiUri.scheme, host: apiUri.host, port: apiUri.port)
@@ -93,6 +105,20 @@ class ApiConfig {
     }
 
     return parsed.toString();
+  }
+
+  /// Returns true if the given [host] is a loopback or private-network address.
+  static bool _isLocalAddress(String host) {
+    if (host == 'localhost' || host == '127.0.0.1' || host == '::1') return true;
+    final parts = host.split('.');
+    if (parts.length != 4) return false;
+    final a = int.tryParse(parts[0]);
+    final b = int.tryParse(parts[1]);
+    if (a == null || b == null) return false;
+    if (a == 10) return true;                          // 10.0.0.0/8
+    if (a == 192 && b == 168) return true;             // 192.168.0.0/16
+    if (a == 172 && b >= 16 && b <= 31) return true;   // 172.16.0.0/12
+    return false;
   }
 
   // Highly accurate endpoints connected to your existing userProfile backend folder
@@ -240,6 +266,17 @@ class ApiConfig {
   static String rejectJoinRequest(int id, int reqId) =>
       "$baseUrl/communities/$id/join-requests/$reqId/reject";
 
+  // ── Global Events module endpoints (PRD Section 7.4) ─────────
+  static String get events => "$baseUrl/event";
+  static String get eventCategories => "$baseUrl/event/categories";
+  static String get upcomingEvents => "$baseUrl/event/upcoming";
+  static String get nearbyEvents => "$baseUrl/event/nearby";
+  static String get myEventRsvps => "$baseUrl/event/my-rsvps";
+  static String eventDetails(int id) => "$baseUrl/event/$id";
+  static String eventRsvp(int id) => "$baseUrl/event/$id/rsvp";
+  static String eventParticipants(int id) => "$baseUrl/event/$id/participants";
+  static String cancelEvent(int id) => "$baseUrl/event/$id/cancel";
+
   // ── Socket.IO base URL (no /api/v1 path) ────────────────────
   static String get socketUrl {
     final apiUri = Uri.parse(baseUrl);
@@ -249,3 +286,4 @@ class ApiConfig {
         .replaceFirst(RegExp(r'/+$'), '');
   }
 }
+

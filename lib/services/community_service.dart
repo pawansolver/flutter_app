@@ -455,6 +455,19 @@ class CommunityService {
     }
   }
 
+  /// Ban a member from community (Admin only)
+  Future<bool> banMember(int communityId, int memberId) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.banCommunityMember(communityId, memberId),
+        options: await _authOptions(),
+      );
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to ban member');
+    }
+  }
+
   Future<bool> unbanMember(int communityId, int userId) async {
     try {
       final response = await _dio.post(
@@ -500,6 +513,19 @@ class CommunityService {
       return CommunityAnnouncementModel.fromJson(_unwrapObject(response.data));
     } on DioException catch (e) {
       throw _mapDioException(e, 'Failed to publish announcement');
+    }
+  }
+
+  /// Delete an announcement (Admin / Moderator only)
+  Future<bool> deleteAnnouncement(int communityId, int announcementId) async {
+    try {
+      final response = await _dio.delete(
+        ApiConfig.communityAnnouncement(communityId, announcementId),
+        options: await _authOptions(),
+      );
+      return response.statusCode == 200 || response.statusCode == 204;
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to delete announcement');
     }
   }
 
@@ -965,6 +991,49 @@ class CommunityService {
     );
   }
 
+
   int _asInt(dynamic value, {int fallback = 0}) =>
       value is int ? value : int.tryParse(value?.toString() ?? '') ?? fallback;
+
+  /// Browse all public communities (search + category filter + pagination)
+  /// Maps to: GET /communities?search=...&category_id=...&cursor=...&limit=...
+  Future<({List<CommunityModel> communities, String? nextCursor, bool hasMore})>
+      getAllCommunities({
+    String? search,
+    int? categoryId,
+    String? cursor,
+    int limit = 20,
+  }) async {
+    try {
+      final options = await _authOptions(optional: true);
+      final query = <String, dynamic>{
+        'limit': limit,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+        if (categoryId != null) 'category_id': categoryId,
+        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+      };
+
+      final response = await _dio.get(
+        '${ApiConfig.baseUrl}/communities',
+        queryParameters: query,
+        options: options,
+      );
+
+      final body = response.data;
+      final data = body['data'] is Map ? body['data'] : body;
+      final rawList = (data['communities'] ?? data['items'] ?? body['communities'] ?? []) as List<dynamic>;
+
+      final communities = rawList
+          .whereType<Map<String, dynamic>>()
+          .map((item) => CommunityModel.fromJson(item))
+          .toList();
+
+      final nextCursor = data['nextCursor']?.toString() ?? data['cursor']?.toString();
+      final hasMore = data['hasMore'] == true || data['has_more'] == true;
+
+      return (communities: communities, nextCursor: nextCursor, hasMore: hasMore);
+    } on DioException catch (e) {
+      throw _mapDioException(e, 'Failed to browse communities.');
+    }
+  }
 }

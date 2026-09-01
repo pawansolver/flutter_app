@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -157,7 +158,11 @@ class NotificationService {
     if (fcmToken == null) return;
 
     final deviceId = await _getDeviceId();
-    final platform = Platform.isIOS ? 'ios' : 'android';
+    final platform = kIsWeb
+        ? 'web'
+        : Platform.isIOS
+            ? 'ios'
+            : 'android';
     final appVersion = await _getAppVersion();
     final deviceModel = await _getDeviceModel();
 
@@ -175,9 +180,9 @@ class NotificationService {
           'deviceModel': deviceModel,
         },
       );
-      log('Device successfully registered with backend.');
+      log('Device registered with backend successfully');
     } catch (e) {
-      log('Failed to register device: $e');
+      log('Failed to register device with backend: $e');
     }
   }
 
@@ -196,6 +201,7 @@ class NotificationService {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   Future<String?> _getDeviceId() async {
+    if (kIsWeb) return 'web-client';
     final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
     try {
       if (Platform.isAndroid) {
@@ -212,6 +218,7 @@ class NotificationService {
   }
 
   Future<String> _getDeviceModel() async {
+    if (kIsWeb) return 'Web Browser';
     final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
     try {
       if (Platform.isAndroid) {

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import '../core/api_config.dart';
 
 enum CommunityJoinStatus {
@@ -160,14 +161,32 @@ class CommunityModel {
         (rawRole != null && rawRole != 'none');
 
     List<String>? parsedRules;
-    if (json['rules'] is List) {
-      parsedRules = (json['rules'] as List).map((e) => e.toString()).toList();
-    } else if (json['rules'] is String &&
-        (json['rules'] as String).isNotEmpty) {
-      parsedRules = (json['rules'] as String)
-          .split('\n')
-          .where((r) => r.trim().isNotEmpty)
+    final rawRules = json['rules'] ?? json['communityRules'] ?? json['guidelines'];
+    if (rawRules is List) {
+      parsedRules = rawRules
+          .map((e) => e.toString().trim())
+          .where((r) => r.isNotEmpty)
           .toList();
+    } else if (rawRules is String && rawRules.trim().isNotEmpty) {
+      final trimmed = rawRules.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          final decoded = jsonDecode(trimmed);
+          if (decoded is List) {
+            parsedRules = decoded
+                .map((e) => e.toString().trim())
+                .where((r) => r.isNotEmpty)
+                .toList();
+          }
+        } catch (_) {}
+      }
+      if (parsedRules == null) {
+        parsedRules = trimmed
+            .split(RegExp(r'[\r\n]+'))
+            .map((r) => r.replaceFirst(RegExp(r'^\d+[\.\)]\s*'), '').trim())
+            .where((r) => r.isNotEmpty)
+            .toList();
+      }
     }
 
     final rawId = json['communityId'] ?? json['id'];
