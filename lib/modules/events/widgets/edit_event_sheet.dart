@@ -6,6 +6,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../../models/event_model.dart';
 import '../../../services/event_service.dart';
+import '../../../services/auth_service.dart';
+import '../../../services/community_service.dart';
+import '../../../models/community_models.dart';
 
 class EditEventSheet extends StatefulWidget {
   final EventModel event;
@@ -76,6 +79,37 @@ class _EditEventSheetState extends State<EditEventSheet> {
     _eventType = e.eventType;
     _selectedCategoryId = e.categoryId;
     _loadCategories();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAuthorizationGuard();
+    });
+  }
+
+  Future<void> _checkAuthorizationGuard() async {
+    final authService = AuthService();
+    final userId = await authService.getUserId();
+    final isGlobalAdmin = await authService.isGlobalAdmin();
+    final isCreator = userId != null && widget.event.creator?.userId == userId;
+
+    if (isCreator || isGlobalAdmin) return;
+
+    if (widget.event.communityId != null) {
+      try {
+        final details = await CommunityService().getCommunityDetails(widget.event.communityId!);
+        if (details.myRole == CommunityRole.admin || details.myRole == CommunityRole.moderator) {
+          return;
+        }
+      } catch (_) {}
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You are not authorized to edit this event.'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
+      );
+      Navigator.pop(context);
+    }
   }
 
   Future<void> _loadCategories() async {

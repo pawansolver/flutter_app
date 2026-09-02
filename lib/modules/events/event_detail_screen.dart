@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import '../../models/event_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/event_service.dart';
+import '../../services/community_service.dart';
+import '../../models/community_models.dart';
 import 'event_participants_screen.dart';
 import 'widgets/edit_event_sheet.dart';
 
@@ -30,6 +32,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isRsvpUpdating = false;
   bool _isActionLoading = false;
   int? _currentUserId;
+  bool _isGlobalAdmin = false;
+  CommunityRole? _myCommunityRole;
 
   @override
   void initState() {
@@ -44,17 +48,55 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<void> _loadCurrentUser() async {
     _currentUserId = await _authService.getUserId();
+    _isGlobalAdmin = await _authService.isGlobalAdmin();
+    if (_event?.communityId != null) {
+      await _loadCommunityRole(_event!.communityId!);
+    }
     if (mounted) setState(() {});
   }
 
-  bool get _isOwner =>
+  Future<void> _loadCommunityRole(int communityId) async {
+    try {
+      final details = await CommunityService().getCommunityDetails(communityId);
+      if (mounted) {
+        setState(() {
+          _myCommunityRole = details.myRole;
+        });
+      }
+    } catch (_) {}
+  }
+
+  bool get _isCreator =>
       _currentUserId != null &&
       _event?.creator != null &&
       _event!.creator!.userId == _currentUserId;
 
+  bool get _isCommunityAdminOrMod =>
+      _myCommunityRole == CommunityRole.admin ||
+      _myCommunityRole == CommunityRole.moderator;
+
+  bool get _isCommunityAdmin =>
+      _myCommunityRole == CommunityRole.admin;
+
+  bool get _canEdit =>
+      _isCreator || _isGlobalAdmin || _isCommunityAdminOrMod;
+
+  bool get _canCancel =>
+      (_event != null && !_event!.isCancelled) &&
+      (_isCreator || _isGlobalAdmin || _isCommunityAdminOrMod);
+
+  bool get _canDelete =>
+      _isCreator || _isGlobalAdmin || _isCommunityAdmin;
+
+  bool get _hasManagementPrivileges =>
+      _canEdit || _canCancel || _canDelete;
+
   Future<void> _fetchDetails() async {
     try {
       final fresh = await _eventService.getEventDetails(widget.eventId);
+      if (fresh.communityId != null && _myCommunityRole == null) {
+        _loadCommunityRole(fresh.communityId!);
+      }
       if (mounted) {
         setState(() {
           _event = fresh;
@@ -331,7 +373,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))),
                 )
-              else if (_isOwner)
+              else if (_hasManagementPrivileges)
                 PopupMenuButton<String>(
                   icon: Container(
                     padding: const EdgeInsets.all(6),
@@ -347,19 +389,21 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     if (val == 'delete') _handleDelete();
                   },
                   itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: Color(0xFF2563EB)), SizedBox(width: 10), Text('Edit Event', style: TextStyle(fontWeight: FontWeight.w600))]),
-                    ),
-                    if (_event != null && !_event!.isCancelled)
+                    if (_canEdit)
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: Color(0xFF2563EB)), SizedBox(width: 10), Text('Edit Event', style: TextStyle(fontWeight: FontWeight.w600))]),
+                      ),
+                    if (_canCancel)
                       const PopupMenuItem(
                         value: 'cancel',
                         child: Row(children: [Icon(Icons.cancel_outlined, size: 18, color: Color(0xFFD97706)), SizedBox(width: 10), Text('Cancel Event', style: TextStyle(fontWeight: FontWeight.w600))]),
                       ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Color(0xFFDC2626)), SizedBox(width: 10), Text('Delete Event', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFDC2626)))]),
-                    ),
+                    if (_canDelete)
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Color(0xFFDC2626)), SizedBox(width: 10), Text('Delete Event', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFDC2626)))]),
+                      ),
                   ],
                 ),
             ],
