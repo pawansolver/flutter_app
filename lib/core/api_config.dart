@@ -11,7 +11,7 @@ class ApiConfig {
 
   /// Set this to true if testing on a REAL PHYSICAL PHONE connected via Wi-Fi.
   /// Set to false if testing on Android Emulator / Web / Desktop.
-  static const bool usePhysicalPhoneLan = true;
+  static const bool usePhysicalPhoneLan = false;
 
   /// Local Machine Wi-Fi IP (current IP: 192.168.31.15)
   static const String localLanIp = '192.168.31.15';
@@ -49,13 +49,13 @@ class ApiConfig {
 
   /// Base URL resolution (priority order):
   ///  1. --dart-define=API_BASE_URL  → explicit override (always wins)
-  ///  2. useLocalhost = true / Debug → Localhost dev URLs (10.0.2.2 / 127.0.0.1 / localhost)
-  ///  3. Release Mode                → Live Production URL
+  ///  2. useLocalhost = true         → Local dev URLs (10.0.2.2 / 127.0.0.1 / localhost)
+  ///  3. Default                     → Live Production URL (https://api.smartgali.com/api/v1)
   static String get baseUrl {
     String selected;
     if (_hasCustomUrl) {
       selected = _configuredUrl.trim();
-    } else if (useLocalhost || !kReleaseMode) {
+    } else if (useLocalhost) {
       selected = _localDevUrl;
     } else {
       // Live Production API Server
@@ -100,7 +100,11 @@ class ApiConfig {
     if (_isLocalAddress(parsed.host)) {
       final apiUri = Uri.parse(baseUrl);
       return parsed
-          .replace(scheme: apiUri.scheme, host: apiUri.host, port: apiUri.port)
+          .replace(
+            scheme: apiUri.scheme,
+            host: apiUri.host,
+            port: apiUri.hasPort ? apiUri.port : null,
+          )
           .toString();
     }
 
@@ -276,6 +280,54 @@ class ApiConfig {
   static String eventRsvp(int id) => "$baseUrl/event/$id/rsvp";
   static String eventParticipants(int id) => "$baseUrl/event/$id/participants";
   static String cancelEvent(int id) => "$baseUrl/event/$id/cancel";
+
+  // ── Society module endpoints (Enterprise Hardened) ────────────
+  // Society Profile
+  static String get societyProfiles => "$baseUrl/society-profile";
+  static String societyProfile(int id) => "$baseUrl/society-profile/$id";
+  static String transferSocietyOwnership(int id) =>
+      "$baseUrl/society-profile/$id/transfer-ownership";
+
+  // Society Members
+  static String get societyMembers => "$baseUrl/society-member";
+  static String societyMember(int id) => "$baseUrl/society-member/$id";
+  static String updateSocietyMemberRole(int id) =>
+      "$baseUrl/society-member/$id/role";
+  static String approveSocietyMember(int id) =>
+      "$baseUrl/society-member/$id/approve";
+
+  // Society Announcements
+  static String get societyAnnouncements => "$baseUrl/society-announcement";
+  static String societyAnnouncement(int id) =>
+      "$baseUrl/society-announcement/$id";
+
+  // Society Complaints
+  static String get societyComplaints => "$baseUrl/society-complaint";
+  static String societyComplaint(int id) => "$baseUrl/society-complaint/$id";
+  static String societyComplaintStatus(int id) =>
+      "$baseUrl/society-complaint/$id/status";
+  static String assignSocietyComplaint(int id) =>
+      "$baseUrl/society-complaint/$id/assign";
+
+  // Society Facilities
+  static String get societyFacilities => "$baseUrl/society-facility";
+  static String societyFacility(int id) => "$baseUrl/society-facility/$id";
+
+  // Society Parking
+  static String get societyParkings => "$baseUrl/society-parking";
+  static String societyParking(int id) => "$baseUrl/society-parking/$id";
+
+  // Society Polls
+  static String get societyPolls => "$baseUrl/society-poll";
+  static String societyPoll(int id) => "$baseUrl/society-poll/$id";
+  static String voteSocietyPoll(int id) => "$baseUrl/society-poll/$id/vote";
+  static String societyPollStatus(int id) => "$baseUrl/society-poll/$id/status";
+
+  // Society Visitors
+  static String get societyVisitors => "$baseUrl/society-visitor";
+  static String societyVisitor(int id) => "$baseUrl/society-visitor/$id";
+  static String societyVisitorStatus(int id) =>
+      "$baseUrl/society-visitor/$id/status";
 
   // ── Socket.IO base URL (no /api/v1 path) ────────────────────
   static String get socketUrl {

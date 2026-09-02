@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../dashboard/main_dashboard.dart';
+import '../../services/society_service.dart';
+import '../../models/society_models.dart';
 
 // ─── Colors ────────────────────────────────────────────────────────
 class _C {
@@ -10,111 +12,94 @@ class _C {
   static const orange = Color(0xFFFF6B00);
 }
 
-// ─── Model ─────────────────────────────────────────────────────────
-class AnnouncementItem {
-  final String category;
-  final String title;
-  final String description;
-  final String dateTime;
-  final bool isUrgent;
-
-  const AnnouncementItem({
-    required this.category,
-    required this.title,
-    required this.description,
-    required this.dateTime,
-    this.isUrgent = false,
-  });
-}
-
-// ─── Dummy Data ────────────────────────────────────────────────────
-final List<AnnouncementItem> dummyAnnouncements = [
-  AnnouncementItem(
-    category: 'Maintenance',
-    title: 'Lift Maintenance Scheduled',
-    description:
-        'Lift maintenance is scheduled for Friday, 4 July between 2:00 PM – 5:00 PM. Please use staircases during this period. Inconvenience is regretted.',
-    dateTime: 'Today, 10:30 AM',
-    isUrgent: true,
-  ),
-  AnnouncementItem(
-    category: 'General',
-    title: 'Monthly RWA Meeting – July 2026',
-    description:
-        'All residents are cordially invited to attend the monthly RWA General Body Meeting on Sunday, 6 July at 11:00 AM in the Community Hall.',
-    dateTime: 'Yesterday, 6:00 PM',
-    isUrgent: false,
-  ),
-  AnnouncementItem(
-    category: 'Security',
-    title: 'New Visitor Entry Protocol',
-    description:
-        'Effective immediately, all visitors must register at the main gate using the smartgali app or provide a valid photo ID. Residents are requested to pre-approve their guests.',
-    dateTime: '2 Jul, 9:00 AM',
-    isUrgent: true,
-  ),
-  AnnouncementItem(
-    category: 'Finance',
-    title: 'Maintenance Due – Q3 2026',
-    description:
-        'Quarterly maintenance dues of ₹3,500 are due by 10th July 2026. Please pay via the smartgali app or bank transfer. Late fee of ₹100/day applicable after due date.',
-    dateTime: '1 Jul, 12:00 PM',
-    isUrgent: false,
-  ),
-  AnnouncementItem(
-    category: 'Event',
-    title: 'Independence Day Celebration',
-    description:
-        'Our society will celebrate Independence Day on 15th August at 8:00 AM in the main garden. Flag hoisting will be followed by breakfast and cultural performances.',
-    dateTime: '30 Jun, 4:00 PM',
-    isUrgent: false,
-  ),
-  AnnouncementItem(
-    category: 'Maintenance',
-    title: 'Water Tank Cleaning – Block B',
-    description:
-        'Water supply will be interrupted on 8th July (Tuesday) from 9 AM to 1 PM for annual tank cleaning in Block B. Please store water in advance.',
-    dateTime: '29 Jun, 11:00 AM',
-    isUrgent: false,
-  ),
-];
-
-// ─── Screen ────────────────────────────────────────────────────────
 class AnnouncementsScreen extends StatefulWidget {
-  const AnnouncementsScreen({super.key});
+  final int? societyId;
+  const AnnouncementsScreen({super.key, this.societyId});
 
   @override
   State<AnnouncementsScreen> createState() => _AnnouncementsScreenState();
 }
 
 class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
+  final SocietyService _societyService = SocietyService();
+
+  int? _resolvedSocietyId;
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<SocietyAnnouncementModel> _announcements = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _initAndLoad();
+  }
+
+  Future<void> _initAndLoad() async {
+    _resolvedSocietyId = await _societyService.resolveActiveSocietyId(widget.societyId);
+
+    if (_resolvedSocietyId != null) {
+      await _loadAnnouncements();
+    } else {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadAnnouncements() async {
+    if (_resolvedSocietyId == null) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final res = await _societyService.getAnnouncements(
+        _resolvedSocietyId!,
+        includeExpired: false,
+        limit: 50,
+      );
+      if (mounted) {
+        setState(() {
+          _announcements = res.data;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   // ── Category Badge
   _CategoryStyle _getCategoryStyle(String category) {
-    switch (category) {
-      case 'Maintenance':
-        return _CategoryStyle(
-          bg: const Color(0xFFFFEDD5),
-          text: const Color(0xFF9A3412),
+    switch (category.toLowerCase()) {
+      case 'maintenance':
+        return const _CategoryStyle(
+          bg: Color(0xFFFFEDD5),
+          text: Color(0xFF9A3412),
         );
-      case 'Security':
-        return _CategoryStyle(
-          bg: const Color(0xFFFFE4E6),
-          text: const Color(0xFF9F1239),
+      case 'security':
+        return const _CategoryStyle(
+          bg: Color(0xFFFFE4E6),
+          text: Color(0xFF9F1239),
         );
-      case 'Finance':
-        return _CategoryStyle(
-          bg: const Color(0xFFEFF6FF),
-          text: const Color(0xFF1E40AF),
+      case 'finance':
+        return const _CategoryStyle(
+          bg: Color(0xFFEFF6FF),
+          text: Color(0xFF1E40AF),
         );
-      case 'Event':
-        return _CategoryStyle(
-          bg: const Color(0xFFF0FDF4),
-          text: const Color(0xFF166534),
+      case 'event':
+        return const _CategoryStyle(
+          bg: Color(0xFFF0FDF4),
+          text: Color(0xFF166534),
         );
       default: // General
-        return _CategoryStyle(
-          bg: const Color(0xFFF3F4F6),
-          text: const Color(0xFF374151),
+        return const _CategoryStyle(
+          bg: Color(0xFFF3F4F6),
+          text: Color(0xFF374151),
         );
     }
   }
@@ -128,7 +113,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        category,
+        category.toUpperCase(),
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
@@ -140,7 +125,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   }
 
   // ── Announcement Card
-  Widget _buildCard(AnnouncementItem item) {
+  Widget _buildCard(SocietyAnnouncementModel item) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -155,10 +140,14 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top row: badge + urgent icon
+            // Top row: badge + urgent icon + pinned
             Row(
               children: [
                 _buildCategoryBadge(item.category),
+                if (item.isPinned) ...[
+                  const SizedBox(width: 8),
+                  const Icon(Icons.push_pin, size: 14, color: _C.orange),
+                ],
                 const Spacer(),
                 if (item.isUrgent) ...[
                   const Icon(
@@ -193,7 +182,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
             // Description
             Text(
-              item.description,
+              item.message,
               style: const TextStyle(fontSize: 13, color: _C.sub, height: 1.6),
             ),
             const SizedBox(height: 12),
@@ -208,12 +197,157 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 const Icon(Icons.access_time_outlined, size: 14, color: _C.sub),
                 const SizedBox(width: 5),
                 Text(
-                  item.dateTime,
+                  item.createdAt != null
+                      ? '${item.createdAt!.day}/${item.createdAt!.month}/${item.createdAt!.year}'
+                      : 'Recent',
                   style: const TextStyle(fontSize: 12, color: _C.sub),
+                ),
+                const Spacer(),
+                Text(
+                  item.authorName,
+                  style: const TextStyle(fontSize: 11, color: _C.sub, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showCreateAnnouncementModal() {
+    if (_resolvedSocietyId == null) return;
+    final titleController = TextEditingController();
+    final messageController = TextEditingController();
+    final categoryController = TextEditingController(text: 'General');
+    String priority = 'medium';
+    bool isPinned = false;
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: EdgeInsets.only(
+            left: 24, right: 24, top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Publish Notice',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF111827))),
+                  IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: titleController,
+                decoration: InputDecoration(
+                  labelText: 'Notice Title',
+                  filled: true,
+                  fillColor: const Color(0xFFF9FAFB),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: messageController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Notice Message',
+                  filled: true,
+                  fillColor: const Color(0xFFF9FAFB),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      initialValue: priority,
+                      decoration: InputDecoration(
+                        labelText: 'Priority',
+                        filled: true,
+                        fillColor: const Color(0xFFF9FAFB),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'low', child: Text('Low')),
+                        DropdownMenuItem(value: 'medium', child: Text('Medium')),
+                        DropdownMenuItem(value: 'high', child: Text('High')),
+                        DropdownMenuItem(value: 'urgent', child: Text('Urgent')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => priority = val);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Row(
+                    children: [
+                      Checkbox(
+                        activeColor: _C.orange,
+                        value: isPinned,
+                        onChanged: (val) => setModalState(() => isPinned = val ?? false),
+                      ),
+                      const Text('Pin Notice', style: TextStyle(fontSize: 13)),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _C.orange,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          final title = titleController.text.trim();
+                          final msg = messageController.text.trim();
+                          if (title.isEmpty || msg.isEmpty) return;
+
+                          setModalState(() => isSubmitting = true);
+                          try {
+                            await _societyService.createAnnouncement(
+                              _resolvedSocietyId!,
+                              title: title,
+                              message: msg,
+                              priority: priority,
+                              category: categoryController.text.trim().toLowerCase(),
+                              isPinned: isPinned,
+                            );
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            _loadAnnouncements();
+                          } catch (_) {
+                            setModalState(() => isSubmitting = false);
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Publish Announcement',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -241,6 +375,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       },
       child: Scaffold(
         backgroundColor: _C.bg,
+        floatingActionButton: FloatingActionButton(
+          backgroundColor: _C.orange,
+          elevation: 0,
+          onPressed: _showCreateAnnouncementModal,
+          child: const Icon(Icons.add, color: Colors.white),
+        ),
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -263,11 +403,52 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             child: Container(height: 1, color: _C.border),
           ),
         ),
-        body: ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: dummyAnnouncements.length,
-          itemBuilder: (_, i) => _buildCard(dummyAnnouncements[i]),
-        ),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: _C.orange))
+            : RefreshIndicator(
+                color: _C.orange,
+                onRefresh: _loadAnnouncements,
+                child: Column(
+                  children: [
+                    if (_errorMessage != null)
+                      Container(
+                        margin: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline, color: Colors.redAccent, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: TextStyle(color: Colors.red.shade800, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Expanded(
+                      child: _announcements.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'No announcements published yet',
+                                style: TextStyle(color: _C.sub, fontSize: 14),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                              itemCount: _announcements.length,
+                              itemBuilder: (_, i) => _buildCard(_announcements[i]),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
       ),
     );
   }

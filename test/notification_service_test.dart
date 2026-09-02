@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 
 class MockFirebaseMessaging extends Mock implements FirebaseMessaging {}
 class MockNotificationSettings extends Mock implements NotificationSettings {}

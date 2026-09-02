@@ -62,15 +62,22 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              'assets/images/logosmartgali.png',
-              width: 150,
-              height: 200,
-              // If the logo image is not found, fallback to an icon for now
-              errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.location_on,
-                size: 150,
-                color: Color(0xFFFF6B00),
+            ColorFiltered(
+              colorFilter: const ColorFilter.mode(
+                Color(0xFFE1EAE4),
+                BlendMode.multiply,
+              ),
+              child: Image.asset(
+                'assets/images/jg.png',
+                width: 150,
+                height: 200,
+                fit: BoxFit.contain,
+                // If the logo image is not found, fallback to an icon for now
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.location_on,
+                  size: 150,
+                  color: Color(0xFFFF6B00),
+                ),
               ),
             ),
             const SizedBox(height: 24),

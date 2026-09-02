@@ -28,8 +28,8 @@ android {
         applicationId = "com.nighwantech.smartgali"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = 9
-        versionName = "1.0.8"
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
     signingConfigs {
         create("release") {
