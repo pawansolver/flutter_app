@@ -4,7 +4,7 @@ import 'dart:io' show Platform;
 class ApiConfig {
   /// Toggle to easily switch between Localhost backend and Live Production Server.
   /// When true (or in debug mode), the app connects to the local backend on port 5000.
-  static const bool useLocalhost = false;
+  static const bool useLocalhost = true;
 
   /// Live Production API URL
   static const String _productionUrl = 'https://api.smartgali.com/api/v1';

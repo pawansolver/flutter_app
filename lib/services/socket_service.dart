@@ -25,6 +25,7 @@ class SocketService {
   final List<MessageEventCallback> _messagePinnedListeners = [];
   final List<MessageEventCallback> _messageDeliveredListeners = [];
   final List<MessageEventCallback> _messageReadListeners = [];
+  final List<MessageEventCallback> _accessRevokedListeners = [];
   final List<TypingCallback> _typingListeners = [];
   final List<PresenceCallback> _presenceListeners = [];
   final Set<int> _joinedChatIds = {};
@@ -95,6 +96,9 @@ class SocketService {
     });
     _socket!.on('message:read', (data) {
       _dispatchMessageEvent(data, _messageReadListeners);
+    });
+    _socket!.on('chat:access-revoked', (data) {
+      _dispatchMessageEvent(data, _accessRevokedListeners);
     });
 
     // ── Typing indicator ─────────────────────────────────────────
@@ -210,6 +214,16 @@ class SocketService {
 
   void removeMessageReadListener(MessageEventCallback cb) {
     _messageReadListeners.remove(cb);
+  }
+
+  void addAccessRevokedListener(MessageEventCallback cb) {
+    if (!_accessRevokedListeners.contains(cb)) {
+      _accessRevokedListeners.add(cb);
+    }
+  }
+
+  void removeAccessRevokedListener(MessageEventCallback cb) {
+    _accessRevokedListeners.remove(cb);
   }
 
   /// Emit message:delivered

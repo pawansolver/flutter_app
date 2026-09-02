@@ -368,7 +368,7 @@ class CommunityFilesView extends StatelessWidget {
                       tooltip: 'Download File',
                       onPressed: () => _downloadAndOpen(context, doc),
                     ),
-                    if ((canManage || isMember) && onDeleteDocument != null)
+                    if (canManage && onDeleteDocument != null)
                       IconButton(
                         icon: const Icon(
                           Icons.delete_outline_rounded,

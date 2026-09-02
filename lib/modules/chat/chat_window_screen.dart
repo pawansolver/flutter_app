@@ -176,6 +176,25 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
       _scrollToBottom(jump: true);
     } catch (error) {
       if (!mounted) return;
+      final errorStr = error.toString().toLowerCase();
+      final isUnauthorized = errorStr.contains('403') ||
+          errorStr.contains('401') ||
+          errorStr.contains('not a member') ||
+          errorStr.contains('forbidden') ||
+          errorStr.contains('active rsvp is required') ||
+          errorStr.contains('membership required');
+
+      if (isUnauthorized) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You no longer have access to this chat.'),
+            backgroundColor: Color(0xFFDC2626),
+          ),
+        );
+        Navigator.pop(context);
+        return;
+      }
+
       setState(() {
         _error = _errorText(error);
         _isLoading = false;
@@ -1134,10 +1153,7 @@ class _ChatWindowScreenState extends State<ChatWindowScreen>
     }
   }
 
-  void _cancelUpload(MessageModel message) {
-    final key = message.idempotencyKey;
-    if (key != null) _pending[key]?.cancelToken?.cancel('Cancelled by user');
-  }
+
 
   void _onTextChanged() {
     final hasText = _messageController.text.trim().isNotEmpty;

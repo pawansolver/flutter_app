@@ -180,13 +180,11 @@ class CommunityModel {
           }
         } catch (_) {}
       }
-      if (parsedRules == null) {
-        parsedRules = trimmed
-            .split(RegExp(r'[\r\n]+'))
-            .map((r) => r.replaceFirst(RegExp(r'^\d+[\.\)]\s*'), '').trim())
-            .where((r) => r.isNotEmpty)
-            .toList();
-      }
+      parsedRules ??= trimmed
+          .split(RegExp(r'[\r\n]+'))
+          .map((r) => r.replaceFirst(RegExp(r'^\d+[\.\)]\s*'), '').trim())
+          .where((r) => r.isNotEmpty)
+          .toList();
     }
 
     final rawId = json['communityId'] ?? json['id'];

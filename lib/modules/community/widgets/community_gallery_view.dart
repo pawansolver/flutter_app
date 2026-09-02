@@ -27,7 +27,7 @@ class CommunityGalleryView extends StatelessWidget {
         mediaItems: mediaItems,
         initialIndex: initialIndex,
         onDeleteMedia: onDeleteMedia,
-        canDelete: isMember || canManage,
+        canDelete: canManage,
       ),
     );
   }
