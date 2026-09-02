@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/community_models.dart';
+import '../../services/auth_service.dart';
 import '../../services/community_service.dart';
 
 class JoinRequestsScreen extends StatefulWidget {
   final int communityId;
   final String communityName;
+  final CommunityRole? callerRole;
 
   const JoinRequestsScreen({
     super.key,
     required this.communityId,
     required this.communityName,
+    this.callerRole,
   });
 
   @override
@@ -19,6 +22,7 @@ class JoinRequestsScreen extends StatefulWidget {
 
 class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
   final _service = CommunityService();
+  final _authService = AuthService();
   bool _isLoading = true;
   List<CommunityJoinRequestModel> _requests = [];
   final Set<int> _processing = {};
@@ -27,7 +31,62 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadRequests();
+    _checkGuardAndLoad();
+  }
+
+  void _checkGuardAndLoad() async {
+    // 1. If callerRole is admin or moderator -> Allowed immediately
+    if (widget.callerRole == CommunityRole.admin ||
+        widget.callerRole == CommunityRole.moderator) {
+      _loadRequests();
+      return;
+    }
+
+    // 2. If callerRole is explicitly member or none -> Denied immediately
+    if (widget.callerRole == CommunityRole.member ||
+        widget.callerRole == CommunityRole.none) {
+      _denyAccess();
+      return;
+    }
+
+    // 3. If callerRole is null (direct deep navigation), resolve authorization before proceeding
+    final isGlobalAdmin = await _authService.isGlobalAdmin();
+    if (isGlobalAdmin) {
+      _loadRequests();
+      return;
+    }
+
+    // 4. Query actual community details from backend to verify community role
+    try {
+      final details = await _service.getCommunityDetails(widget.communityId);
+      if (details.myRole == CommunityRole.admin ||
+          details.myRole == CommunityRole.moderator) {
+        _loadRequests();
+        return;
+      }
+    } catch (_) {}
+
+    // 5. Default fail-closed: Deny access and NEVER call _loadRequests()
+    _denyAccess();
+  }
+
+  void _denyAccess() {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      _error = 'Access Denied: Requires admin or moderator privilege.';
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Access Denied: Requires admin or moderator privilege.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    });
   }
 
   Future<void> _loadRequests() async {
@@ -37,10 +96,10 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
     });
 
     try {
-      final list = await _service.getPendingJoinRequests(widget.communityId);
+      final reqs = await _service.getPendingJoinRequests(widget.communityId);
       if (mounted) {
         setState(() {
-          _requests = list;
+          _requests = reqs;
           _isLoading = false;
         });
       }
@@ -55,42 +114,54 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
   }
 
   Future<void> _handleApprove(CommunityJoinRequestModel req) async {
-    await _respond(req, approve: true);
+    setState(() => _processing.add(req.id));
+    try {
+      await _service.approveJoinRequest(widget.communityId, req.id);
+      if (mounted) {
+        setState(() {
+          _requests.removeWhere((item) => item.id == req.id);
+          _processing.remove(req.id);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${req.fullName} approved to join!'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _processing.remove(req.id));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _handleReject(CommunityJoinRequestModel req) async {
-    await _respond(req, approve: false);
-  }
-
-  Future<void> _respond(
-    CommunityJoinRequestModel request, {
-    required bool approve,
-  }) async {
-    if (_processing.contains(request.id)) return;
-    setState(() => _processing.add(request.id));
+    setState(() => _processing.add(req.id));
     try {
-      final success = approve
-          ? await _service.approveJoinRequest(widget.communityId, request.id)
-          : await _service.rejectJoinRequest(widget.communityId, request.id);
-      if (!mounted || !success) return;
-      setState(() => _requests.removeWhere((item) => item.id == request.id));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            approve
-                ? '${request.fullName} approved and added to community!'
-                : 'Join request from ${request.fullName} declined.',
-          ),
-        ),
-      );
-    } catch (error) {
+      await _service.rejectJoinRequest(widget.communityId, req.id);
       if (mounted) {
+        setState(() {
+          _requests.removeWhere((item) => item.id == req.id);
+          _processing.remove(req.id);
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString()), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Declined ${req.fullName}\'s request.'),
+            backgroundColor: const Color(0xFF6B7280),
+          ),
         );
       }
-    } finally {
-      if (mounted) setState(() => _processing.remove(request.id));
+    } catch (e) {
+      if (mounted) {
+        setState(() => _processing.remove(req.id));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -103,13 +174,17 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0.5,
+        elevation: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               'Join Requests',
-              style: TextStyle(color: darkText, fontWeight: FontWeight.bold, fontSize: 17),
+              style: TextStyle(
+                color: darkText,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
             ),
             Text(
               widget.communityName,
@@ -142,7 +217,7 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
               const SizedBox(height: 12),
               Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _loadRequests, child: const Text('Try Again')),
+              ElevatedButton(onPressed: _checkGuardAndLoad, child: const Text('Try Again')),
             ],
           ),
         ),
@@ -159,7 +234,7 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                  color: const Color(0xFFECFDF5),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.check_circle_outline_rounded, size: 54, color: Color(0xFF10B981)),
@@ -198,7 +273,7 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
               border: Border.all(color: const Color(0xFFE5E7EB)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
+                  color: const Color(0x08000000),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -212,7 +287,7 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
                   children: [
                     CircleAvatar(
                       radius: 22,
-                      backgroundColor: primaryOrange.withValues(alpha: 0.1),
+                      backgroundColor: const Color(0xFFFFF7ED),
                       backgroundImage: req.avatarUrl != null && req.avatarUrl!.isNotEmpty
                           ? NetworkImage(req.avatarUrl!)
                           : null,

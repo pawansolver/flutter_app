@@ -263,6 +263,17 @@ class AuthService {
     return _sessionStore.readUserId();
   }
 
+  Future<String?> getUserRole() async {
+    return _sessionStore.readUserRole();
+  }
+
+  Future<bool> isGlobalAdmin() async {
+    final role = await getUserRole();
+    if (role == null) return false;
+    final normalized = role.toLowerCase().trim();
+    return normalized == 'admin' || normalized == 'super_admin' || normalized == 'superadmin';
+  }
+
   /// Clears every locally persisted authentication value.
   Future<void> logout() async {
     final refreshToken = await _sessionStore.readRefreshToken();

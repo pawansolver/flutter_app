@@ -150,7 +150,7 @@ class MemberActionSheet extends StatelessWidget {
                 ),
             ],
 
-            // Remove / Ban Options
+            // Remove Option: Allowed for Admin and Moderator (non-admin target)
             if ((isAdmin || myRole == CommunityRole.moderator) && !isTargetAdmin) ...[
               ListTile(
                 leading: const Icon(Icons.person_remove_outlined, color: Color(0xFFEF4444)),
@@ -167,6 +167,10 @@ class MemberActionSheet extends StatelessWidget {
                   );
                 },
               ),
+            ],
+
+            // Ban Option: Strictly restricted to Admin/Owner only
+            if (isAdmin && !isTargetAdmin) ...[
               ListTile(
                 leading: const Icon(Icons.block_rounded, color: Colors.red),
                 title: const Text('Ban Member Permanently', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),

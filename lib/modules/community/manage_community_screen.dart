@@ -1,3 +1,4 @@
+import '../../services/auth_service.dart';
 import 'package:flutter/material.dart';
 import '../../models/community_models.dart';
 import '../../services/community_service.dart';
@@ -14,6 +15,8 @@ class ManageCommunityScreen extends StatefulWidget {
 
 class _ManageCommunityScreenState extends State<ManageCommunityScreen> {
   final _service = CommunityService();
+  final _authService = AuthService();
+  bool _isGlobalAdmin = false;
   late TextEditingController _nameController;
   late TextEditingController _descController;
   late bool _isPrivate;
@@ -31,7 +34,29 @@ class _ManageCommunityScreenState extends State<ManageCommunityScreen> {
     );
     _isPrivate = widget.community.isPrivate;
     _rules.addAll(widget.community.rules ?? []);
-    _loadPendingRequestsCount();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAuthorizationGuard();
+    });
+  }
+
+  Future<void> _checkAuthorizationGuard() async {
+    final isGlobal = await _authService.isGlobalAdmin();
+    if (mounted) {
+      setState(() => _isGlobalAdmin = isGlobal);
+    }
+    final role = widget.community.myRole;
+    final isAllowed = isGlobal || role == CommunityRole.admin || role == CommunityRole.moderator;
+    if (!isAllowed && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Access Denied: You do not have permission to manage this community.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      Navigator.of(context).pop();
+    } else {
+      _loadPendingRequestsCount();
+    }
   }
 
   Future<void> _loadPendingRequestsCount() async {
@@ -303,6 +328,7 @@ class _ManageCommunityScreenState extends State<ManageCommunityScreen> {
                       builder: (_) => JoinRequestsScreen(
                         communityId: widget.community.id,
                         communityName: widget.community.name,
+                        callerRole: widget.community.myRole,
                       ),
                     ),
                   );
@@ -719,51 +745,53 @@ class _ManageCommunityScreenState extends State<ManageCommunityScreen> {
             ),
             const SizedBox(height: 32),
 
-            // Danger Zone: Delete Community
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF2F2),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFFCA5A5)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Danger Zone',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFDC2626),
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Permanently delete this community and all its content.',
-                    style: TextStyle(color: Color(0xFF7F1D1D), fontSize: 12),
-                  ),
-                  const SizedBox(height: 12),
-                  ElevatedButton(
-                    onPressed: _confirmDelete,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+            // Danger Zone: Delete Community (Restricted to Community Admin / Owner)
+            if (_isGlobalAdmin || widget.community.myRole == CommunityRole.admin) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Danger Zone',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFDC2626),
+                        fontSize: 14,
                       ),
                     ),
-                    child: const Text(
-                      'Delete Community',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Permanently delete this community and all its content.',
+                      style: TextStyle(color: Color(0xFF7F1D1D), fontSize: 12),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: _confirmDelete,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEF4444),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        'Delete Community',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 40),
+              const SizedBox(height: 40),
+            ],
           ],
         ),
       ),

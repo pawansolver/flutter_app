@@ -557,6 +557,7 @@ class PollOptionModel {
 class CommunityPollModel {
   final int id;
   final int communityId;
+  final int? createdBy;
   final String question;
   final String createdByName;
   final String? createdByAvatar;
@@ -569,6 +570,7 @@ class CommunityPollModel {
   const CommunityPollModel({
     required this.id,
     required this.communityId,
+    this.createdBy,
     required this.question,
     required this.createdByName,
     this.createdByAvatar,
@@ -604,6 +606,9 @@ class CommunityPollModel {
       authorName = json['created_by_name'].toString();
     }
 
+    final rawCreatorId = json['created_by'] ?? json['createdBy'] ?? (json['creator'] is Map ? json['creator']['userId'] ?? json['creator']['id'] : null);
+    final parsedCreatorId = rawCreatorId is int ? rawCreatorId : int.tryParse(rawCreatorId?.toString() ?? '');
+
     return CommunityPollModel(
       id: json['id'] is int
           ? json['id']
@@ -611,6 +616,7 @@ class CommunityPollModel {
       communityId: json['community_id'] is int
           ? json['community_id']
           : int.tryParse(json['community_id']?.toString() ?? '0') ?? 0,
+      createdBy: parsedCreatorId,
       question: json['question']?.toString() ?? json['title']?.toString() ?? '',
       createdByName: authorName,
       createdByAvatar: ApiConfig.normalizeMediaUrl(

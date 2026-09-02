@@ -98,6 +98,8 @@ class AuthSessionStore {
   Future<String?> readAccessToken() => _storage.read(key: accessTokenKey);
   Future<String?> readRefreshToken() => _storage.read(key: refreshTokenKey);
 
+  Future<String?> readUserRole() => _storage.read(key: userRoleKey);
+
   Future<int?> readUserId() async {
     final value = await _storage.read(key: userIdKey);
     return int.tryParse(value ?? '');

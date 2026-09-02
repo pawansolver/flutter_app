@@ -37,6 +37,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
 
   late CommunityModel _community;
   int? _currentUserId;
+  bool _isGlobalAdmin = false;
   List<CommunityPostModel> _posts = [];
   List<CommunityMemberModel> _members = [];
   List<CommunityPollModel> _polls = [];
@@ -57,7 +58,19 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     super.initState();
     _community = widget.community;
     _tabController = TabController(length: 7, vsync: this);
+    _loadCurrentUserId();
     _loadAllCommunityData();
+  }
+
+  Future<void> _loadCurrentUserId() async {
+    final uid = await _authService.getUserId();
+    final isGlobal = await _authService.isGlobalAdmin();
+    if (mounted) {
+      setState(() {
+        if (uid != null) _currentUserId = uid;
+        _isGlobalAdmin = isGlobal;
+      });
+    }
   }
 
   Future<void> _loadAllCommunityData() async {
@@ -695,7 +708,8 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                     },
                   ),
                 ),
-                if (_community.myRole == CommunityRole.admin ||
+                if (_isGlobalAdmin ||
+                    _community.myRole == CommunityRole.admin ||
                     _community.myRole == CommunityRole.moderator) ...[
                   const SizedBox(width: 8),
                   CircleAvatar(
@@ -1540,9 +1554,13 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
           )
         else
           ..._polls.map((poll) {
+            final isAdminOrMod = _isGlobalAdmin || _community.myRole == CommunityRole.admin || _community.myRole == CommunityRole.moderator;
+            final isCreator = poll.createdBy != null && _currentUserId != null && poll.createdBy == _currentUserId;
+            final canDeletePoll = isAdminOrMod || isCreator;
+
             return CommunityPollCard(
               poll: poll,
-              canDelete: _community.isMember,
+              canDelete: canDeletePoll,
               onDeletePoll: _handleDeletePoll,
               onVote: (pollId, optionId) async {
                 await _communityService.votePoll(
