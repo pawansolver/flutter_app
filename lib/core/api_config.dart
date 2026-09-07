@@ -329,6 +329,19 @@ class ApiConfig {
   static String societyVisitorStatus(int id) =>
       "$baseUrl/society-visitor/$id/status";
 
+  // ── Services Module Endpoints (PRD Sections 7.3 & 18.8) ────
+  static String get serviceCategories => "$baseUrl/service-category";
+  static String serviceCategory(int id) => "$baseUrl/service-category/$id";
+  static String get serviceListings => "$baseUrl/service-listing";
+  static String serviceListing(int id) => "$baseUrl/service-listing/$id";
+  static String get serviceBookings => "$baseUrl/service-booking";
+  static String serviceBooking(int id) => "$baseUrl/service-booking/$id";
+  static String get serviceReviews => "$baseUrl/service-review";
+  static String serviceReview(int id) => "$baseUrl/service-review/$id";
+  static String get serviceProviderProfiles => "$baseUrl/service-provider-profile";
+  static String serviceProviderProfile(int id) =>
+      "$baseUrl/service-provider-profile/$id";
+
   // ── Socket.IO base URL (no /api/v1 path) ────────────────────
   static String get socketUrl {
     final apiUri = Uri.parse(baseUrl);

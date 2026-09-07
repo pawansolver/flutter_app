@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../dashboard/main_dashboard.dart';
 import '../../widgets/custom_drawer.dart';
 import '../community/community_groups_screen.dart';
+import '../services/screens/services_marketplace_screen.dart';
 import '../profile/follow_service.dart';
 import '../profile/user_profile_screen.dart';
 
@@ -257,6 +258,73 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                         ),
                       ),
                       const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ServicesMarketplaceScreen(),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x06000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(Icons.handyman_rounded, color: Color(0xFF2B7BB9), size: 26),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Nearby Services',
+                              style: TextStyle(
+                                color: Color(0xFF111827),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Find plumbers, electricians & home repair nearby',
+                              style: TextStyle(
+                                color: Color(0xFF6B7280),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF9CA3AF), size: 16),
                     ],
                   ),
                 ),

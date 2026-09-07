@@ -5,7 +5,8 @@ import '../modules/events/events_screen.dart';
 import '../modules/discover/discover_screen.dart';
 import '../modules/provider/provider_dashboard_screen.dart';
 import '../modules/community/community_groups_screen.dart';
-import '../modules/bookings/my_bookings_screen.dart';
+import '../modules/services/screens/services_marketplace_screen.dart';
+import '../modules/services/screens/my_service_bookings_screen.dart';
 import '../modules/settings/settings_screen.dart';
 import '../shared/widgets/role_switch_sheet.dart';
 import '../services/auth_service.dart';
@@ -279,18 +280,18 @@ class CustomDrawer extends StatelessWidget {
                     },
                   ),
                   _buildMenuItem(
-                    icon: Icons.assignment_outlined,
-                    title: 'My Bookings',
+                    icon: Icons.storefront_outlined,
+                    title: 'Local Services',
                     isSelected:
                         context
                             .findAncestorWidgetOfExactType<
-                              MyBookingsScreen
+                              ServicesMarketplaceScreen
                             >() !=
                         null,
                     onTap: () {
                       final isCurrent =
                           context.findAncestorWidgetOfExactType<
-                            MyBookingsScreen
+                            ServicesMarketplaceScreen
                           >() !=
                           null;
                       Navigator.pop(context);
@@ -298,7 +299,33 @@ class CustomDrawer extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const MyBookingsScreen(),
+                            builder: (_) => const ServicesMarketplaceScreen(),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  _buildMenuItem(
+                    icon: Icons.assignment_outlined,
+                    title: 'My Bookings',
+                    isSelected:
+                        context
+                            .findAncestorWidgetOfExactType<
+                              MyServiceBookingsScreen
+                            >() !=
+                        null,
+                    onTap: () {
+                      final isCurrent =
+                          context.findAncestorWidgetOfExactType<
+                            MyServiceBookingsScreen
+                          >() !=
+                          null;
+                      Navigator.pop(context);
+                      if (!isCurrent) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MyServiceBookingsScreen(),
                           ),
                         );
                       }
