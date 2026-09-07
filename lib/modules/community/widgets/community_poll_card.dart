@@ -22,7 +22,14 @@ class CommunityPollCard extends StatefulWidget {
 
 class _CommunityPollCardState extends State<CommunityPollCard> {
   int? _optimisticSelectedOptionId;
-  bool _isVoting = false;
+
+  @override
+  void didUpdateWidget(covariant CommunityPollCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.poll != widget.poll) {
+      _optimisticSelectedOptionId = null;
+    }
+  }
 
   String _formatTimeRemaining(DateTime? endsAt) {
     if (endsAt == null) return 'No expiry';
@@ -238,111 +245,120 @@ class _CommunityPollCardState extends State<CommunityPollCard> {
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: InkWell(
-                onTap: (isExpired || _isVoting)
-                    ? null
-                    : () async {
-                        if (isSelected && hasVoted) return; // already selected
-                        setState(() {
-                          _optimisticSelectedOptionId = option.id;
-                          _isVoting = true;
-                        });
-                        try {
-                          await widget.onVote(widget.poll.id, option.id);
-                        } catch (error) {
-                          if (!context.mounted) return;
-                          setState(() => _optimisticSelectedOptionId = null);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(error.toString())),
-                          );
-                        } finally {
-                          if (mounted) setState(() => _isVoting = false);
-                        }
-                      },
+              child: Material(
+                color: isSelected
+                    ? primaryOrange.withValues(alpha: 0.06)
+                    : const Color(0xFFF9FAFB),
                 borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF9FAFB),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected
-                          ? primaryOrange
-                          : const Color(0xFFE5E7EB),
-                      width: isSelected ? 1.5 : 1,
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  mouseCursor: isExpired
+                      ? SystemMouseCursors.basic
+                      : SystemMouseCursors.click,
+                  hoverColor: primaryOrange.withValues(alpha: 0.08),
+                  splashColor: primaryOrange.withValues(alpha: 0.12),
+                  highlightColor: primaryOrange.withValues(alpha: 0.06),
+                  onTap: isExpired
+                      ? null
+                      : () {
+                          if (isSelected && hasVoted) return;
+                          setState(() {
+                            _optimisticSelectedOptionId = option.id;
+                          });
+                          widget.onVote(widget.poll.id, option.id).catchError((error) {
+                            if (mounted && context.mounted) {
+                              setState(() => _optimisticSelectedOptionId = null);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(error.toString())),
+                              );
+                            }
+                          });
+                        },
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected
+                            ? primaryOrange
+                            : const Color(0xFFE5E7EB),
+                        width: isSelected ? 1.5 : 1,
+                      ),
                     ),
-                  ),
-                  child: Stack(
-                    children: [
-                      // Progress percentage bar fill
-                      if (hasVoted || isExpired)
-                        FractionallySizedBox(
-                          widthFactor: (percentage / 100).clamp(0.0, 1.0),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? primaryOrange.withValues(alpha: 0.18)
-                                  : const Color(0xFFE5E7EB).withValues(alpha: 0.6),
-                              borderRadius: BorderRadius.circular(11),
+                    child: Stack(
+                      children: [
+                        // Progress percentage bar fill with smooth animation
+                        if (hasVoted || isExpired)
+                          AnimatedFractionallySizedBox(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            widthFactor: (percentage / 100).clamp(0.0, 1.0),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? primaryOrange.withValues(alpha: 0.18)
+                                    : const Color(0xFFE5E7EB).withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(11),
+                              ),
                             ),
                           ),
-                        ),
 
-                      // Option text and stats
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Row(
-                          children: [
-                            Icon(
-                              isSelected
-                                  ? Icons.check_circle_rounded
-                                  : (hasVoted || isExpired
-                                      ? Icons.radio_button_unchecked_rounded
-                                      : Icons.radio_button_off_rounded),
-                              size: 18,
-                              color: isSelected ? primaryOrange : greySubtext,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                option.text,
-                                style: TextStyle(
-                                  color: darkText,
-                                  fontWeight: isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.w500,
-                                  fontSize: 14,
+                        // Option text and stats
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isSelected
+                                    ? Icons.check_circle_rounded
+                                    : (hasVoted || isExpired
+                                        ? Icons.radio_button_unchecked_rounded
+                                        : Icons.radio_button_off_rounded),
+                                size: 18,
+                                color: isSelected ? primaryOrange : greySubtext,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  option.text,
+                                  style: TextStyle(
+                                    color: isSelected ? primaryOrange : darkText,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.w500,
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ),
-                            ),
-                            if (hasVoted || isExpired)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '$optionVotes ${optionVotes == 1 ? 'vote' : 'votes'}',
-                                    style: const TextStyle(
-                                      color: greySubtext,
-                                      fontSize: 12,
+                              if (hasVoted || isExpired)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '$optionVotes ${optionVotes == 1 ? 'vote' : 'votes'}',
+                                      style: const TextStyle(
+                                        color: greySubtext,
+                                        fontSize: 12,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '${percentage.toStringAsFixed(0)}%',
-                                    style: TextStyle(
-                                      color: isSelected
-                                          ? primaryOrange
-                                          : darkText,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '${percentage.toStringAsFixed(0)}%',
+                                      style: TextStyle(
+                                        color: isSelected
+                                            ? primaryOrange
+                                            : darkText,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                          ],
+                                  ],
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -363,14 +379,26 @@ class _CommunityPollCardState extends State<CommunityPollCard> {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              if (hasVoted) ...[
+              if (hasVoted && !isExpired) ...[
                 const SizedBox(width: 8),
                 const Text('•', style: TextStyle(color: greySubtext, fontSize: 12)),
                 const SizedBox(width: 8),
                 const Text(
-                  'Vote registered',
+                  'Tap any option to change vote',
                   style: TextStyle(
                     color: Color(0xFF10B981),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ] else if (isExpired) ...[
+                const SizedBox(width: 8),
+                const Text('•', style: TextStyle(color: greySubtext, fontSize: 12)),
+                const SizedBox(width: 8),
+                const Text(
+                  'Poll Closed',
+                  style: TextStyle(
+                    color: greySubtext,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),

@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../core/api_config.dart';
 import '../models/community_models.dart';
+import '../models/event_model.dart';
 import 'authenticated_dio.dart';
 
 typedef CommunityTokenProvider = Future<String?> Function();
@@ -109,7 +110,9 @@ class CommunityService {
     int? categoryId,
     bool isPrivate = false,
     String? coverFilePath,
+    Uint8List? coverBytes,
     String? iconFilePath,
+    Uint8List? iconBytes,
     List<String>? rules,
   }) async {
     try {
@@ -123,14 +126,24 @@ class CommunityService {
         if (rules != null && rules.isNotEmpty) 'rules': rules,
       };
 
-      if (coverFilePath != null && coverFilePath.isNotEmpty && !kIsWeb) {
+      if (coverBytes != null && coverBytes.isNotEmpty) {
+        map['cover_image'] = MultipartFile.fromBytes(
+          coverBytes,
+          filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+      } else if (coverFilePath != null && coverFilePath.isNotEmpty && !kIsWeb) {
         map['cover_image'] = await MultipartFile.fromFile(
           coverFilePath,
           filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.jpg',
         );
       }
 
-      if (iconFilePath != null && iconFilePath.isNotEmpty && !kIsWeb) {
+      if (iconBytes != null && iconBytes.isNotEmpty) {
+        map['icon'] = MultipartFile.fromBytes(
+          iconBytes,
+          filename: 'icon_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+      } else if (iconFilePath != null && iconFilePath.isNotEmpty && !kIsWeb) {
         map['icon'] = await MultipartFile.fromFile(
           iconFilePath,
           filename: 'icon_${DateTime.now().millisecondsSinceEpoch}.jpg',
@@ -703,16 +716,48 @@ class CommunityService {
   /// Update Community Settings / Info
   Future<CommunityModel> updateCommunity(
     int communityId,
-    Map<String, dynamic> data,
-  ) async {
+    Map<String, dynamic> data, {
+    Uint8List? coverBytes,
+    String? coverFilePath,
+    Uint8List? iconBytes,
+    String? iconFilePath,
+  }) async {
     try {
       final payload = Map<String, dynamic>.from(data);
-      final coverPath = payload.remove('coverFilePath')?.toString();
-      dynamic requestData = payload;
-      if (coverPath != null && coverPath.isNotEmpty && !kIsWeb) {
-        payload['cover_image'] = await MultipartFile.fromFile(coverPath);
-        requestData = FormData.fromMap(payload);
+      final coverPath = coverFilePath ?? payload.remove('coverFilePath')?.toString();
+      final iconPath = iconFilePath ?? payload.remove('iconFilePath')?.toString();
+      bool hasMultipart = false;
+
+      if (coverBytes != null && coverBytes.isNotEmpty) {
+        payload['cover_image'] = MultipartFile.fromBytes(
+          coverBytes,
+          filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+        hasMultipart = true;
+      } else if (coverPath != null && coverPath.isNotEmpty && !kIsWeb) {
+        payload['cover_image'] = await MultipartFile.fromFile(
+          coverPath,
+          filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+        hasMultipart = true;
       }
+
+      if (iconBytes != null && iconBytes.isNotEmpty) {
+        payload['icon'] = MultipartFile.fromBytes(
+          iconBytes,
+          filename: 'icon_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+        hasMultipart = true;
+      } else if (iconPath != null && iconPath.isNotEmpty && !kIsWeb) {
+        payload['icon'] = await MultipartFile.fromFile(
+          iconPath,
+          filename: 'icon_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+        hasMultipart = true;
+      }
+
+      dynamic requestData = hasMultipart ? FormData.fromMap(payload) : payload;
+
       final response = await _dio.put(
         ApiConfig.community(communityId),
         data: requestData,
@@ -738,7 +783,7 @@ class CommunityService {
   }
 
   /// Get Community Events
-  Future<List<CommunityEventModel>> getCommunityEvents(int communityId) async {
+  Future<List<EventModel>> getCommunityEvents(int communityId) async {
     try {
       final response = await _dio.get(
         ApiConfig.communityEvents(communityId),
@@ -746,7 +791,7 @@ class CommunityService {
       );
       return _unwrapList(
         response.data,
-      ).map(CommunityEventModel.fromJson).toList();
+      ).map((item) => EventModel.fromJson(Map<String, dynamic>.from(item))).toList();
     } on DioException catch (e) {
       throw _mapDioException(e, 'Failed to load events');
     }

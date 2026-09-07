@@ -114,26 +114,34 @@ class CommunityCard extends StatelessWidget {
                         border: Border.all(color: primaryOrange.withValues(alpha: 0.2)),
                       ),
                       child: Center(
-                        child: community.iconUrl != null && community.iconUrl!.isNotEmpty
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: Image.network(
-                                  community.iconUrl!,
-                                  width: 52,
-                                  height: 52,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => const Icon(
-                                    Icons.group_work_rounded,
-                                    color: primaryOrange,
-                                    size: 28,
-                                  ),
+                        child: () {
+                          final imgUrl = (community.iconUrl != null && community.iconUrl!.isNotEmpty)
+                              ? community.iconUrl
+                              : (community.coverImageUrl != null && community.coverImageUrl!.isNotEmpty)
+                                  ? community.coverImageUrl
+                                  : null;
+                          if (imgUrl != null) {
+                            return ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: Image.network(
+                                imgUrl,
+                                width: 52,
+                                height: 52,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => const Icon(
+                                  Icons.group_work_rounded,
+                                  color: primaryOrange,
+                                  size: 28,
                                 ),
-                              )
-                            : const Icon(
-                                Icons.groups_rounded,
-                                color: primaryOrange,
-                                size: 30,
                               ),
+                            );
+                          }
+                          return const Icon(
+                            Icons.groups_rounded,
+                            color: primaryOrange,
+                            size: 30,
+                          );
+                        }(),
                       ),
                     ),
                     const SizedBox(width: 14),

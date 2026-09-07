@@ -17,8 +17,10 @@ import 'widgets/invite_members_sheet.dart';
 import 'widgets/create_poll_sheet.dart';
 import 'widgets/upload_media_sheet.dart';
 import 'widgets/upload_document_sheet.dart';
-import 'widgets/create_community_event_sheet.dart';
 import 'manage_community_screen.dart';
+import '../../models/event_model.dart';
+import '../events/widgets/event_card.dart';
+import '../events/widgets/create_event_sheet.dart';
 
 class CommunityDetailScreen extends StatefulWidget {
   final CommunityModel community;
@@ -44,11 +46,16 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   List<CommunityAnnouncementModel> _announcements = [];
   List<CommunityDocumentModel> _documents = [];
   List<CommunityMediaModel> _gallery = [];
-  List<CommunityEventModel> _events = [];
+  List<EventModel> _events = [];
   String? _nextFeedCursor;
   bool _feedHasMore = false;
   bool _isLoadingMore = false;
   String? _error;
+
+  final TextEditingController _memberSearchController = TextEditingController();
+  String _memberSearchQuery = '';
+  String _selectedMemberRoleFilter = 'All';
+  String _selectedPollFilter = 'All';
 
   bool _isLoading = true;
   bool _isJoining = false;
@@ -58,6 +65,9 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     super.initState();
     _community = widget.community;
     _tabController = TabController(length: 7, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _loadCurrentUserId();
     _loadAllCommunityData();
   }
@@ -118,7 +128,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
           _announcements = results[4] as List<CommunityAnnouncementModel>;
           _documents = results[5] as List<CommunityDocumentModel>;
           _gallery = results[6] as List<CommunityMediaModel>;
-          _events = results[7] as List<CommunityEventModel>;
+          _events = results[7] as List<EventModel>;
           _error = null;
           _isLoading = false;
         });
@@ -650,6 +660,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _memberSearchController.dispose();
     super.dispose();
   }
 
@@ -1059,6 +1070,21 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                 ],
               ),
       ),
+      floatingActionButton: _community.isMember && _tabController.index != 6
+          ? FloatingActionButton.extended(
+              backgroundColor: const Color(0xFFFF6B00),
+              foregroundColor: Colors.white,
+              elevation: 4,
+              icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
+              label: const Text(
+                'Group Chat',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              onPressed: () {
+                _tabController.animateTo(6);
+              },
+            )
+          : null,
     );
   }
 
@@ -1169,15 +1195,20 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                       CircleAvatar(
                         radius: 18,
                         backgroundColor: primaryOrange.withValues(alpha: 0.12),
-                        child: Text(
-                          post.authorName.isNotEmpty
-                              ? post.authorName[0].toUpperCase()
-                              : 'U',
-                          style: const TextStyle(
-                            color: primaryOrange,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        backgroundImage: post.authorAvatar != null && post.authorAvatar!.isNotEmpty
+                            ? NetworkImage(post.authorAvatar!)
+                            : null,
+                        child: post.authorAvatar == null || post.authorAvatar!.isEmpty
+                            ? Text(
+                                post.authorName.isNotEmpty
+                                    ? post.authorName[0].toUpperCase()
+                                    : 'U',
+                                style: const TextStyle(
+                                  color: primaryOrange,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            : null,
                       ),
                       const SizedBox(width: 10),
                       Column(
@@ -1241,14 +1272,19 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                   const SizedBox(height: 12),
 
                   // Post Text
-                  Text(
-                    post.content,
-                    style: const TextStyle(
-                      color: darkText,
-                      fontSize: 14,
-                      height: 1.4,
+                  if (post.content.isNotEmpty)
+                    Text(
+                      post.content,
+                      style: const TextStyle(
+                        color: darkText,
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
                     ),
-                  ),
+
+                  // Post Media (Images/Videos attached to post)
+                  _buildPostMedia(post),
+
                   const SizedBox(height: 14),
                   const Divider(height: 1, color: Color(0xFFF3F4F6)),
                   const SizedBox(height: 10),
@@ -1379,136 +1415,488 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     );
   }
 
+  Widget _buildPostMedia(CommunityPostModel post) {
+    final media = post.mediaUrls;
+    if (media.isEmpty) return const SizedBox.shrink();
+
+    void openFullScreen(int initialIndex) {
+      showDialog(
+        context: context,
+        builder: (ctx) => Dialog(
+          backgroundColor: Colors.black.withValues(alpha: 0.95),
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              InteractiveViewer(
+                child: Center(
+                  child: Image.network(
+                    media[initialIndex],
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => const Icon(
+                      Icons.broken_image_rounded,
+                      color: Colors.white70,
+                      size: 64,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 40,
+                right: 20,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (media.length == 1) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: GestureDetector(
+          onTap: () => openFullScreen(0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              media[0],
+              width: double.infinity,
+              height: 220,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Container(
+                height: 140,
+                color: const Color(0xFFF3F4F6),
+                child: const Center(
+                  child: Icon(Icons.broken_image_rounded, color: Colors.grey),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (media.length == 2) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => openFullScreen(0),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.horizontal(
+                    left: Radius.circular(12),
+                  ),
+                  child: Image.network(
+                    media[0],
+                    height: 180,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        Container(height: 180, color: const Color(0xFFF3F4F6)),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => openFullScreen(1),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.horizontal(
+                    right: Radius.circular(12),
+                  ),
+                  child: Image.network(
+                    media[1],
+                    height: 180,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        Container(height: 180, color: const Color(0xFFF3F4F6)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 3 or more images
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          height: 190,
+          child: Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: GestureDetector(
+                  onTap: () => openFullScreen(0),
+                  child: Image.network(
+                    media[0],
+                    height: 190,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        Container(color: const Color(0xFFF3F4F6)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                flex: 1,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => openFullScreen(1),
+                        child: Image.network(
+                          media[1],
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              Container(color: const Color(0xFFF3F4F6)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => openFullScreen(2),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.network(
+                              media[2],
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) =>
+                                  Container(color: const Color(0xFFF3F4F6)),
+                            ),
+                            if (media.length > 3)
+                              Container(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                child: Center(
+                                  child: Text(
+                                    '+${media.length - 3}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── Tab 4: Members ─────────────────────────────────────────────
+  Widget _buildRoleFilterChip(String label, int count) {
+    final isSelected = _selectedMemberRoleFilter == label;
+    const primaryOrange = Color(0xFFFF6B00);
+    return ChoiceChip(
+      label: Text('$label ($count)'),
+      labelStyle: TextStyle(
+        color: isSelected ? Colors.white : const Color(0xFF4B5563),
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+        fontSize: 12,
+      ),
+      selected: isSelected,
+      selectedColor: primaryOrange,
+      backgroundColor: const Color(0xFFF3F4F6),
+      side: BorderSide(
+        color: isSelected ? primaryOrange : const Color(0xFFE5E7EB),
+      ),
+      onSelected: (_) {
+        setState(() {
+          _selectedMemberRoleFilter = label;
+        });
+      },
+    );
+  }
+
   Widget _buildMembersTab() {
     const primaryOrange = Color(0xFFFF6B00);
     const darkText = Color(0xFF111827);
     const greySubtext = Color(0xFF6B7280);
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: _members.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final member = _members[index];
-        final isAdmin = member.role == CommunityRole.admin;
-        final isMod = member.role == CommunityRole.moderator;
+    final adminCount = _members.where((m) => m.role == CommunityRole.admin).length;
+    final modCount = _members.where((m) => m.role == CommunityRole.moderator).length;
+    final regularCount = _members.where((m) => m.role == CommunityRole.member || m.role == CommunityRole.none).length;
 
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFF3F4F6)),
-          ),
-          child: Row(
+    final filteredMembers = _members.where((m) {
+      if (_selectedMemberRoleFilter == 'Admins' && m.role != CommunityRole.admin) return false;
+      if (_selectedMemberRoleFilter == 'Moderators' && m.role != CommunityRole.moderator) return false;
+      if (_selectedMemberRoleFilter == 'Members' && (m.role == CommunityRole.admin || m.role == CommunityRole.moderator)) return false;
+
+      if (_memberSearchQuery.trim().isNotEmpty) {
+        final query = _memberSearchQuery.toLowerCase().trim();
+        final matchName = m.fullName.toLowerCase().contains(query);
+        final matchUser = (m.userName ?? '').toLowerCase().contains(query);
+        if (!matchName && !matchUser) return false;
+      }
+      return true;
+    }).toList();
+
+    return Column(
+      children: [
+        // Search & Filter Header
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: primaryOrange.withValues(alpha: 0.12),
-                child: Text(
-                  member.fullName.isNotEmpty
-                      ? member.fullName[0].toUpperCase()
-                      : 'M',
-                  style: const TextStyle(
-                    color: primaryOrange,
-                    fontWeight: FontWeight.bold,
+              // Search Input
+              TextField(
+                controller: _memberSearchController,
+                onChanged: (val) => setState(() => _memberSearchQuery = val),
+                decoration: InputDecoration(
+                  hintText: 'Search members by name or @username...',
+                  hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                  prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey, size: 20),
+                  suffixIcon: _memberSearchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18, color: Colors.grey),
+                          onPressed: () {
+                            _memberSearchController.clear();
+                            setState(() => _memberSearchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: const Color(0xFFF9FAFB),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: primaryOrange, width: 1.5),
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 10),
+
+              // Filter Chips
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
                   children: [
-                    Text(
-                      member.fullName,
-                      style: const TextStyle(
-                        color: darkText,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      member.userName ?? '@resident',
-                      style: const TextStyle(color: greySubtext, fontSize: 12),
-                    ),
+                    _buildRoleFilterChip('All', _members.length),
+                    const SizedBox(width: 8),
+                    _buildRoleFilterChip('Admins', adminCount),
+                    const SizedBox(width: 8),
+                    _buildRoleFilterChip('Moderators', modCount),
+                    const SizedBox(width: 8),
+                    _buildRoleFilterChip('Members', regularCount),
                   ],
                 ),
               ),
-              if (isAdmin)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: primaryOrange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'Admin',
-                    style: TextStyle(
-                      color: primaryOrange,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: Color(0xFFE5E7EB)),
+
+        // Members List
+        Expanded(
+          child: filteredMembers.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.person_search_rounded, size: 48, color: Colors.grey),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'No members found',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: darkText),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _memberSearchQuery.isNotEmpty
+                              ? 'No members match "$_memberSearchQuery"'
+                              : 'No members in this filter',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 13, color: greySubtext),
+                        ),
+                      ],
                     ),
                   ),
                 )
-              else if (isMod)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'Moderator',
-                    style: TextStyle(
-                      color: Color(0xFF3B82F6),
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              // 3-dots actions for admins / moderators
-              if (_community.myRole == CommunityRole.admin ||
-                  _community.myRole == CommunityRole.moderator) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  icon: const Icon(
-                    Icons.more_vert_rounded,
-                    size: 20,
-                    color: Colors.grey,
-                  ),
-                  onPressed: () {
-                    MemberActionSheet.show(
-                      context,
-                      member: member,
-                      myRole: _community.myRole,
-                      onUpdateRole: (newRole) =>
-                          _updateMemberRole(member, newRole),
-                      onRemove: () =>
-                          _removeOrBanMember(member, ban: false),
-                      onBan: () => _removeOrBanMember(member, ban: true),
-                      onMessage: () => _openMemberChat(member),
+              : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredMembers.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final member = filteredMembers[index];
+                    final isAdmin = member.role == CommunityRole.admin;
+                    final isMod = member.role == CommunityRole.moderator;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFF3F4F6)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.02),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundColor: primaryOrange.withValues(alpha: 0.12),
+                            backgroundImage: member.avatarUrl != null && member.avatarUrl!.isNotEmpty
+                                ? NetworkImage(member.avatarUrl!)
+                                : null,
+                            child: member.avatarUrl == null || member.avatarUrl!.isEmpty
+                                ? Text(
+                                    member.fullName.isNotEmpty ? member.fullName[0].toUpperCase() : 'M',
+                                    style: const TextStyle(
+                                      color: primaryOrange,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  member.fullName,
+                                  style: const TextStyle(
+                                    color: darkText,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+                                  member.userName != null && member.userName!.isNotEmpty
+                                      ? '@${member.userName!.replaceFirst('@', '')}'
+                                      : '@resident',
+                                  style: const TextStyle(color: greySubtext, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (isAdmin)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: primaryOrange.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Text(
+                                'Admin',
+                                style: TextStyle(
+                                  color: primaryOrange,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )
+                          else if (isMod)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Text(
+                                'Moderator',
+                                style: TextStyle(
+                                  color: Color(0xFF3B82F6),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          // 3-dots actions for admins / moderators
+                          if (_community.myRole == CommunityRole.admin ||
+                              _community.myRole == CommunityRole.moderator) ...[
+                            const SizedBox(width: 4),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.more_vert_rounded,
+                                size: 20,
+                                color: Colors.grey,
+                              ),
+                              onPressed: () {
+                                MemberActionSheet.show(
+                                  context,
+                                  member: member,
+                                  myRole: _community.myRole,
+                                  onUpdateRole: (newRole) =>
+                                      _updateMemberRole(member, newRole),
+                                  onRemove: () =>
+                                      _removeOrBanMember(member, ban: false),
+                                  onBan: () => _removeOrBanMember(member, ban: true),
+                                  onMessage: () => _openMemberChat(member),
+                                );
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
                     );
                   },
                 ),
-              ],
-            ],
-          ),
-        );
-      },
+        ),
+      ],
     );
   }
 
   // ── Tab 5: Polls ───────────────────────────────────────────────
   Widget _buildPollsTab() {
     const primaryOrange = Color(0xFFFF6B00);
+    const darkText = Color(0xFF111827);
+    const greySubtext = Color(0xFF6B7280);
+
+    final now = DateTime.now();
+    final livePolls = _polls.where((p) => p.endsAt == null || p.endsAt!.isAfter(now)).toList();
+    final endedPolls = _polls.where((p) => p.endsAt != null && p.endsAt!.isBefore(now)).toList();
+
+    List<CommunityPollModel> filteredPolls = _polls;
+    if (_selectedPollFilter == 'Live') {
+      filteredPolls = livePolls;
+    } else if (_selectedPollFilter == 'Ended') {
+      filteredPolls = endedPolls;
+    }
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -1539,26 +1927,81 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
+          const SizedBox(height: 12),
+        ],
+
+        // Filter Chips (All, Live Polls, Ended)
+        if (_polls.isNotEmpty) ...[
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildPollFilterChip(
+                  label: 'All (${_polls.length})',
+                  filterKey: 'All',
+                ),
+                const SizedBox(width: 8),
+                _buildPollFilterChip(
+                  label: 'Live (${livePolls.length})',
+                  filterKey: 'Live',
+                ),
+                const SizedBox(width: 8),
+                _buildPollFilterChip(
+                  label: 'Ended (${endedPolls.length})',
+                  filterKey: 'Ended',
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 16),
         ],
 
-        if (_polls.isEmpty)
-          const Center(
+        if (filteredPolls.isEmpty)
+          Center(
             child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Text(
-                'No active polls right now',
-                style: TextStyle(color: Colors.grey),
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.poll_outlined,
+                    size: 48,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _selectedPollFilter == 'Live'
+                        ? 'No active live polls'
+                        : _selectedPollFilter == 'Ended'
+                            ? 'No ended polls'
+                            : 'No community polls yet',
+                    style: const TextStyle(
+                      color: darkText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Ask a question to collect votes and opinions from members.',
+                    style: TextStyle(color: greySubtext, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
           )
         else
-          ..._polls.map((poll) {
-            final isAdminOrMod = _isGlobalAdmin || _community.myRole == CommunityRole.admin || _community.myRole == CommunityRole.moderator;
-            final isCreator = poll.createdBy != null && _currentUserId != null && poll.createdBy == _currentUserId;
+          ...filteredPolls.map((poll) {
+            final isAdminOrMod = _isGlobalAdmin ||
+                _community.myRole == CommunityRole.admin ||
+                _community.myRole == CommunityRole.moderator;
+            final isCreator = poll.createdBy != null &&
+                _currentUserId != null &&
+                poll.createdBy == _currentUserId;
             final canDeletePoll = isAdminOrMod || isCreator;
 
             return CommunityPollCard(
+              key: ValueKey('poll_${poll.id}'),
               poll: poll,
               canDelete: canDeletePoll,
               onDeletePoll: _handleDeletePoll,
@@ -1582,6 +2025,38 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     );
   }
 
+  Widget _buildPollFilterChip({
+    required String label,
+    required String filterKey,
+  }) {
+    const primaryOrange = Color(0xFFFF6B00);
+    final isSelected = _selectedPollFilter == filterKey;
+
+    return InkWell(
+      onTap: () => setState(() => _selectedPollFilter = filterKey),
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryOrange : const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? primaryOrange : const Color(0xFFE5E7EB),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : const Color(0xFF374151),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── Tab 6: Events ──────────────────────────────────────────────
   Widget _buildEventsTab() {
     const primaryOrange = Color(0xFFFF6B00);
@@ -1591,15 +2066,16 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Host Event Button
+        // Host Event Button (Opens full rich event creator sheet scoped to this community)
         if (_community.isMember) ...[
           OutlinedButton.icon(
             onPressed: () {
-              CreateCommunityEventSheet.show(
+              CreateEventSheet.show(
                 context,
                 communityId: _community.id,
-                onEventCreated: (newEvent) =>
-                    setState(() => _events.insert(0, newEvent)),
+                onEventCreated: (newEvent) {
+                  setState(() => _events.insert(0, newEvent));
+                },
               );
             },
             style: OutlinedButton.styleFrom(
@@ -1641,7 +2117,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'Organize match days, festival celebrations or meetings!',
+                    'Organize match days, festival celebrations, meetings or tournaments!',
                     style: TextStyle(color: greySubtext, fontSize: 13),
                     textAlign: TextAlign.center,
                   ),
@@ -1651,161 +2127,33 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
           )
         else
           ..._events.map((ev) {
-            final dt = ev.date;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFF3F4F6)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: primaryOrange.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          children: [
-                            Text(
-                              [
-                                'SUN',
-                                'MON',
-                                'TUE',
-                                'WED',
-                                'THU',
-                                'FRI',
-                                'SAT',
-                              ][dt.weekday % 7],
-                              style: const TextStyle(
-                                color: primaryOrange,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '${dt.day}',
-                              style: const TextStyle(
-                                color: primaryOrange,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              ev.title,
-                              style: const TextStyle(
-                                color: darkText,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
-                            Text(
-                              ev.venue,
-                              style: const TextStyle(
-                                color: greySubtext,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (ev.description != null && ev.description!.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      ev.description!,
-                      style: const TextStyle(
-                        color: Color(0xFF4B5563),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Text(
-                        'Going: ${ev.goingCount}',
-                        style: const TextStyle(
-                          color: greySubtext,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Spacer(),
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          try {
-                            final newStatus = ev.myRsvpStatus == 'going' ? 'declined' : 'going';
-                            final updated = await _communityService
-                                .rsvpCommunityEvent(_community.id, ev, newStatus);
-                            if (mounted) {
-                              setState(() {
-                                final idx = _events.indexWhere((item) => item.id == ev.id);
-                                if (idx != -1) {
-                                  _events[idx] = updated;
-                                }
-                              });
-                            }
-                          } catch (error) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(error.toString()),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: ev.myRsvpStatus == 'going'
-                              ? const Color(0xFF10B981)
-                              : primaryOrange,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        ),
-                        icon: Icon(
-                          ev.myRsvpStatus == 'going'
-                              ? Icons.check_circle_outline_rounded
-                              : Icons.event_available_rounded,
-                          size: 16,
-                        ),
-                        label: Text(
-                          ev.myRsvpStatus == 'going'
-                              ? 'Attending'
-                              : 'RSVP (Attend)',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            return EventCard(
+              event: ev,
+              onRsvpChanged: (newStatus) {
+                final idx = _events.indexWhere((item) => item.id == ev.id);
+                if (idx != -1) {
+                  setState(() {
+                    final old = _events[idx];
+                    int newGoing = old.goingCount;
+                    int newInterested = old.interestedCount;
+                    if (old.myRsvpStatus == 'going' && newStatus != 'going') {
+                      newGoing = (newGoing - 1).clamp(0, 999999);
+                    } else if (old.myRsvpStatus != 'going' && newStatus == 'going') {
+                      newGoing += 1;
+                    }
+                    if (old.myRsvpStatus == 'interested' && newStatus != 'interested') {
+                      newInterested = (newInterested - 1).clamp(0, 999999);
+                    } else if (old.myRsvpStatus != 'interested' && newStatus == 'interested') {
+                      newInterested += 1;
+                    }
+                    _events[idx] = old.copyWith(
+                      myRsvpStatus: newStatus,
+                      goingCount: newGoing,
+                      interestedCount: newInterested,
+                    );
+                  });
+                }
+              },
             );
           }),
       ],

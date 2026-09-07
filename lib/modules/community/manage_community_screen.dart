@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:image_picker/image_picker.dart';
 import '../../services/auth_service.dart';
 import 'package:flutter/material.dart';
 import '../../models/community_models.dart';
@@ -16,6 +19,7 @@ class ManageCommunityScreen extends StatefulWidget {
 class _ManageCommunityScreenState extends State<ManageCommunityScreen> {
   final _service = CommunityService();
   final _authService = AuthService();
+  final _picker = ImagePicker();
   bool _isGlobalAdmin = false;
   late TextEditingController _nameController;
   late TextEditingController _descController;
@@ -25,9 +29,14 @@ class _ManageCommunityScreenState extends State<ManageCommunityScreen> {
   bool _isSaving = false;
   int _pendingCount = 0;
 
+  XFile? _coverFile;
+  Uint8List? _coverBytes;
+  String? _existingCoverUrl;
+
   @override
   void initState() {
     super.initState();
+    _existingCoverUrl = widget.community.coverImageUrl;
     _nameController = TextEditingController(text: widget.community.name);
     _descController = TextEditingController(
       text: widget.community.description ?? '',
@@ -186,6 +195,38 @@ class _ManageCommunityScreenState extends State<ManageCommunityScreen> {
     );
   }
 
+  Future<void> _pickCoverImage() async {
+    try {
+      final picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1200,
+        maxHeight: 1200,
+      );
+      if (picked != null) {
+        final bytes = await picked.readAsBytes();
+        setState(() {
+          _coverFile = picked;
+          _coverBytes = bytes;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              kIsWeb
+                  ? '📷 Image upload not supported in this browser.'
+                  : '❌ Could not access gallery. Check photo permissions in Settings.',
+            ),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _saveSettings() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
@@ -197,12 +238,17 @@ class _ManageCommunityScreenState extends State<ManageCommunityScreen> {
 
     setState(() => _isSaving = true);
     try {
-      final updated = await _service.updateCommunity(widget.community.id, {
-        'communityName': name,
-        'communityDescription': _descController.text.trim(),
-        'is_private': _isPrivate,
-        'rules': _rules,
-      });
+      final updated = await _service.updateCommunity(
+        widget.community.id,
+        {
+          'communityName': name,
+          'communityDescription': _descController.text.trim(),
+          'is_private': _isPrivate,
+          'rules': _rules,
+        },
+        coverBytes: _coverBytes,
+        coverFilePath: kIsWeb ? null : _coverFile?.path,
+      );
 
       if (mounted) {
         setState(() => _isSaving = false);
@@ -255,9 +301,31 @@ class _ManageCommunityScreenState extends State<ManageCommunityScreen> {
     );
 
     if (confirmed == true && mounted) {
-      await _service.deleteCommunity(widget.community.id);
-      if (mounted) {
-        Navigator.pop(context, 'DELETED');
+      setState(() => _isSaving = true);
+      try {
+        await _service.deleteCommunity(widget.community.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Community deleted successfully.'),
+              backgroundColor: Color(0xFF10B981),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          Navigator.pop(context, 'DELETED');
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isSaving = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ ${e.toString().replaceAll('Exception: ', '')}'),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
       }
     }
   }
@@ -504,6 +572,88 @@ class _ManageCommunityScreenState extends State<ManageCommunityScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Cover Photo Picker
+                  const Text(
+                    'Cover Photo',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: darkText,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: _pickCoverImage,
+                    child: Container(
+                      width: double.infinity,
+                      height: 130,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _coverBytes != null || (_existingCoverUrl != null && _existingCoverUrl!.isNotEmpty)
+                              ? primaryOrange.withValues(alpha: 0.4)
+                              : const Color(0xFFE5E7EB),
+                        ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (_coverBytes != null)
+                            Image.memory(_coverBytes!, fit: BoxFit.cover)
+                          else if (_existingCoverUrl != null && _existingCoverUrl!.isNotEmpty)
+                            Image.network(
+                              _existingCoverUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Center(
+                                child: Icon(Icons.broken_image_rounded, color: Colors.grey),
+                              ),
+                            )
+                          else
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Icon(Icons.add_photo_alternate_outlined, size: 30, color: primaryOrange),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Tap to add Cover Photo',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: darkText),
+                                ),
+                              ],
+                            ),
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.65),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Change',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
                   const Text(
                     'Community Name',
                     style: TextStyle(

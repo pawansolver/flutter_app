@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -23,7 +24,11 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
 
   int? _selectedCategoryId = 2; // Default Sports
   bool _isPrivate = false;
-  File? _coverImage;
+
+  // Cross-platform image state — XFile works on both web & mobile
+  XFile? _coverImageFile;
+  Uint8List? _coverImageBytes; // Used for web preview (FileImage won't work on web)
+
   final List<String> _rules = [
     'Be respectful and supportive to all neighbors',
     'No spam or irrelevant commercial promotions',
@@ -52,11 +57,34 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
 
   Future<void> _pickCoverImage() async {
     try {
-      final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+      final picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1200,
+        maxHeight: 1200,
+      );
       if (picked != null) {
-        setState(() => _coverImage = File(picked.path));
+        final bytes = await picked.readAsBytes();
+        setState(() {
+          _coverImageFile = picked;
+          _coverImageBytes = bytes;
+        });
       }
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              kIsWeb
+                  ? '📷 Image upload not supported in this browser. Please use the mobile app.'
+                  : '❌ Could not access gallery. Please allow photo permissions in Settings.',
+            ),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   void _addRule() {
@@ -84,7 +112,8 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
         description: _descController.text.trim(),
         categoryId: _selectedCategoryId,
         isPrivate: _isPrivate,
-        coverFilePath: _coverImage?.path,
+        coverFilePath: kIsWeb ? null : _coverImageFile?.path,
+        coverBytes: _coverImageBytes,
         rules: _rules,
       );
 
@@ -180,7 +209,7 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Cover Image Picker
+              // Cover Image Picker — Cross-platform (Web + Mobile)
               GestureDetector(
                 onTap: _pickCoverImage,
                 child: Container(
@@ -189,16 +218,36 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3F4F6),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                    image: _coverImage != null
-                        ? DecorationImage(
-                            image: FileImage(_coverImage!),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
+                    border: Border.all(
+                      color: _coverImageBytes != null
+                          ? primaryOrange.withValues(alpha: 0.5)
+                          : const Color(0xFFE5E7EB),
+                      width: _coverImageBytes != null ? 2 : 1,
+                    ),
                   ),
-                  child: _coverImage == null
-                      ? Column(
+                  clipBehavior: Clip.antiAlias,
+                  child: _coverImageBytes != null
+                      ? Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // ✅ Web-safe image preview using bytes
+                            Image.memory(
+                              _coverImageBytes!,
+                              fit: BoxFit.cover,
+                            ),
+                            // Edit overlay
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: CircleAvatar(
+                                backgroundColor: Colors.black.withValues(alpha: 0.6),
+                                radius: 16,
+                                child: const Icon(Icons.edit, color: Colors.white, size: 16),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: const [
                             Icon(Icons.add_photo_alternate_outlined, size: 36, color: primaryOrange),
@@ -207,7 +256,7 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
                               'Add Community Cover Photo',
                               style: TextStyle(
                                 color: darkText,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.bold,
                                 fontSize: 14,
                               ),
                             ),
@@ -216,15 +265,6 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
                               style: TextStyle(color: greySubtext, fontSize: 12),
                             ),
                           ],
-                        )
-                      : Container(
-                          alignment: Alignment.topRight,
-                          padding: const EdgeInsets.all(8),
-                          child: CircleAvatar(
-                            backgroundColor: Colors.black.withValues(alpha: 0.6),
-                            radius: 16,
-                            child: const Icon(Icons.edit, color: Colors.white, size: 16),
-                          ),
                         ),
                 ),
               ),

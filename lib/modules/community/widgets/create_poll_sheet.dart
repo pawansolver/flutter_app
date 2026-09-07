@@ -305,38 +305,44 @@ class _CreatePollSheetState extends State<CreatePollSheet> {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              const Spacer(),
-              ...[1, 3, 7].map((days) {
-                final isSelected = _durationDays == days;
-                return GestureDetector(
-                  onTap: () => setState(() => _durationDays = days),
-                  child: Container(
-                    margin: const EdgeInsets.only(left: 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? primaryOrange
-                          : const Color(0xFFF3F4F6),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [1, 3, 7, 14, 30].map((days) {
+                    final isSelected = _durationDays == days;
+                    return InkWell(
+                      mouseCursor: SystemMouseCursors.click,
                       borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '$days Days',
-                      style: TextStyle(
-                        color: isSelected
-                            ? Colors.white
-                            : const Color(0xFF4B5563),
-                        fontSize: 11,
-                        fontWeight: isSelected
-                            ? FontWeight.bold
-                            : FontWeight.normal,
+                      onTap: () => setState(() => _durationDays = days),
+                      child: Container(
+                        margin: const EdgeInsets.only(left: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? primaryOrange
+                              : const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '$days ${days == 1 ? 'Day' : 'Days'}',
+                          style: TextStyle(
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF4B5563),
+                            fontSize: 11,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                );
-              }),
+                    );
+                  }).toList(),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 20),
