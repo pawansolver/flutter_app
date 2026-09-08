@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../models/service_models.dart';
 import '../../../services/service_marketplace_service.dart';
 import 'create_service_flow_screen.dart';
+import 'manage_availability_screen.dart';
 
 class MyServicesScreen extends StatefulWidget {
   const MyServicesScreen({super.key});
@@ -345,6 +346,17 @@ class _MyServicesScreenState extends State<MyServicesScreen>
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.schedule, color: Color(0xFF111827)),
+            tooltip: 'Manage Availability',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ManageAvailabilityScreen()),
+              );
+              _fetchServices();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.add_circle_outline, color: Color(0xFF111827)),
             tooltip: 'Create Service',

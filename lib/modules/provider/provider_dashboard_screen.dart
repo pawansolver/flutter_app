@@ -5,7 +5,12 @@ import '../../models/service_models.dart';
 import '../../services/service_marketplace_service.dart';
 import '../../shared/widgets/role_switch_sheet.dart';
 import '../services/screens/create_service_flow_screen.dart';
+import '../services/screens/manage_availability_screen.dart';
 import '../services/screens/my_services_screen.dart';
+import '../services/screens/provider_booking_detail_screen.dart';
+import '../services/screens/provider_bookings_screen.dart';
+import '../services/screens/provider_earnings_screen.dart';
+import '../services/screens/provider_reviews_screen.dart';
 
 class ProviderDashboardScreen extends StatefulWidget {
   const ProviderDashboardScreen({super.key});
@@ -176,271 +181,6 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
     );
   }
 
-  // ── Quick Action Modals ──────────────────────────────────────────────────
-
-  void _showAvailabilitySheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setSheetState) => Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Provider Availability',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Color(0xFF6B7280)),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF9FAFB),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Online Status',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _isOnline ? 'Currently accepting new bookings' : 'Currently taking a break',
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-                        ),
-                      ],
-                    ),
-                    Switch(
-                      value: _isOnline,
-                      activeThumbColor: const Color(0xFF10B981),
-                      onChanged: (val) {
-                        setState(() => _isOnline = val);
-                        setSheetState(() {});
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Weekly Schedule',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Mon – Sat: 09:00 AM – 06:00 PM\nSunday: Off',
-                style: TextStyle(fontSize: 13, color: Color(0xFF4B5563), height: 1.5),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF111827),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                  ),
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Save & Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showReviewsSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Client Reviews',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: Color(0xFF6B7280)),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFBEB),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFDE68A)),
-              ),
-              child: Row(
-                children: [
-                  const Text('⭐ 4.8', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFFD97706))),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text('Rated by verified neighborhood residents', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF92400E))),
-                        SizedBox(height: 2),
-                        Text('100% positive punctuality & quality feedback', style: TextStyle(fontSize: 11, color: Color(0xFFB45309))),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Review list item
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text('“Very professional, fixed the pipe leak quickly and was on time!”', style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: Color(0xFF374151))),
-                  SizedBox(height: 6),
-                  Text('— Resident (Green Heights, Block B)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF6B7280))),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showEarningsSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Earnings Summary',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: Color(0xFF6B7280)),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFECFDF5),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFA7F3D0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Total Completed Bookings Revenue', style: TextStyle(fontSize: 12, color: Color(0xFF047857))),
-                  const SizedBox(height: 4),
-                  Text(
-                    '₹${_stats.earnings.toStringAsFixed(0)}',
-                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF065F46)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Completed Jobs', style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
-                        const SizedBox(height: 4),
-                        Text('${_stats.completedBookings}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF111827))),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Pending Jobs', style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
-                        const SizedBox(height: 4),
-                        Text('${_stats.pendingBookings}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFF59E0B))),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -665,12 +405,70 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _buildSummaryCard('Total Services', '${_stats.totalServices}', Icons.design_services, const Color(0xFF2B7BB9), cardWidth),
-                _buildSummaryCard('Pending Bookings', '${_stats.pendingBookings}', Icons.pending_actions, const Color(0xFFF59E0B), cardWidth),
-                _buildSummaryCard('Upcoming Bookings', '${_stats.upcomingBookings}', Icons.event_available, const Color(0xFF6366F1), cardWidth),
-                _buildSummaryCard('Completed Bookings', '${_stats.completedBookings}', Icons.task_alt, const Color(0xFF10B981), cardWidth),
-                _buildSummaryCard('Rating', '⭐ ${_stats.rating}', Icons.star_outline, const Color(0xFFFF6B00), cardWidth),
-                _buildSummaryCard('Earnings', '₹${_stats.earnings.toStringAsFixed(0)}', Icons.account_balance_wallet_outlined, const Color(0xFF047857), cardWidth),
+                _buildSummaryCard(
+                  'Total Services',
+                  '${_stats.totalServices}',
+                  Icons.design_services,
+                  const Color(0xFF2B7BB9),
+                  cardWidth,
+                  onTap: () async {
+                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyServicesScreen()));
+                    _checkAuthAndLoad();
+                  },
+                ),
+                _buildSummaryCard(
+                  'Pending Bookings',
+                  '${_stats.pendingBookings}',
+                  Icons.pending_actions,
+                  const Color(0xFFF59E0B),
+                  cardWidth,
+                  onTap: () async {
+                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProviderBookingsScreen(initialFilter: 'Pending')));
+                    _checkAuthAndLoad();
+                  },
+                ),
+                _buildSummaryCard(
+                  'Upcoming Bookings',
+                  '${_stats.upcomingBookings}',
+                  Icons.event_available,
+                  const Color(0xFF6366F1),
+                  cardWidth,
+                  onTap: () async {
+                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProviderBookingsScreen(initialFilter: 'Confirmed')));
+                    _checkAuthAndLoad();
+                  },
+                ),
+                _buildSummaryCard(
+                  'Completed Bookings',
+                  '${_stats.completedBookings}',
+                  Icons.task_alt,
+                  const Color(0xFF10B981),
+                  cardWidth,
+                  onTap: () async {
+                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProviderBookingsScreen(initialFilter: 'Completed')));
+                    _checkAuthAndLoad();
+                  },
+                ),
+                _buildSummaryCard(
+                  'Rating',
+                  '⭐ ${_stats.rating}',
+                  Icons.star_outline,
+                  const Color(0xFFFF6B00),
+                  cardWidth,
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ProviderReviewsScreen()));
+                  },
+                ),
+                _buildSummaryCard(
+                  'Earnings',
+                  '₹${_stats.earnings.toStringAsFixed(0)}',
+                  Icons.account_balance_wallet_outlined,
+                  const Color(0xFF047857),
+                  cardWidth,
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ProviderEarningsScreen()));
+                  },
+                ),
               ],
             );
           },
@@ -679,42 +477,46 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
     );
   }
 
-  Widget _buildSummaryCard(String label, String value, IconData icon, Color color, double width) {
-    return Container(
-      width: width,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+  Widget _buildSummaryCard(String label, String value, IconData icon, Color color, double width, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: width,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                  ),
                 ),
-              ),
-              Icon(icon, size: 18, color: color),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: color,
+                Icon(icon, size: 18, color: color),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 10),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -736,13 +538,32 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
         );
         _checkAuthAndLoad();
       }},
-      {'label': 'Availability', 'icon': Icons.schedule, 'color': const Color(0xFF10B981), 'action': _showAvailabilitySheet},
-      {'label': 'Bookings', 'icon': Icons.calendar_month_outlined, 'color': const Color(0xFF6366F1), 'action': () {
-        // Scroll / Focus to bookings
-        _showToast('Viewing bookings below');
+      {'label': 'Availability', 'icon': Icons.schedule, 'color': const Color(0xFF10B981), 'action': () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ManageAvailabilityScreen()),
+        );
+        _checkAuthAndLoad();
       }},
-      {'label': 'Reviews', 'icon': Icons.rate_review_outlined, 'color': const Color(0xFFFF6B00), 'action': _showReviewsSheet},
-      {'label': 'Earnings', 'icon': Icons.payments_outlined, 'color': const Color(0xFF047857), 'action': _showEarningsSheet},
+      {'label': 'Bookings', 'icon': Icons.calendar_month_outlined, 'color': const Color(0xFF6366F1), 'action': () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ProviderBookingsScreen()),
+        );
+        _checkAuthAndLoad();
+      }},
+      {'label': 'Reviews', 'icon': Icons.rate_review_outlined, 'color': const Color(0xFFFF6B00), 'action': () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ProviderReviewsScreen()),
+        );
+      }},
+      {'label': 'Earnings', 'icon': Icons.payments_outlined, 'color': const Color(0xFF047857), 'action': () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ProviderEarningsScreen()),
+        );
+      }},
     ];
 
     return Column(
@@ -948,11 +769,27 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Recent Bookings',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Recent Bookings',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+            ),
+            if (_bookings.isNotEmpty)
+              TextButton(
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ProviderBookingsScreen()),
+                  );
+                  _checkAuthAndLoad();
+                },
+                child: const Text('View All', style: TextStyle(color: Color(0xFF2B7BB9), fontWeight: FontWeight.bold)),
+              ),
+          ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         if (_bookings.isEmpty)
           _buildBookingsEmptyState()
         else
@@ -969,80 +806,92 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
         ? '${booking.scheduledAt!.day}/${booking.scheduledAt!.month}/${booking.scheduledAt!.year}'
         : 'Date TBD';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Top Row: Customer & Status Pill
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                booking.customerName ?? 'Neighborhood Resident',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
-              ),
-              _buildStatusPill(booking.status),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // Service Title & Scheduled Date
-          Text(
-            booking.serviceTitle ?? 'Service Request',
-            style: const TextStyle(fontSize: 13, color: Color(0xFF374151), fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              const Icon(Icons.calendar_today_outlined, size: 13, color: Color(0xFF6B7280)),
-              const SizedBox(width: 6),
-              Text(dateStr, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
-              if (booking.amount != null) ...[
-                const SizedBox(width: 12),
-                Text('•  ₹${booking.amount!.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF111827))),
-              ],
-            ],
-          ),
-
-          // Pending Actions: Accept / Reject
-          if (isPending) ...[
-            const Divider(height: 20, color: Color(0xFFF3F4F6)),
+    return InkWell(
+      onTap: () async {
+        final updated = await Navigator.push<ServiceBookingModel>(
+          context,
+          MaterialPageRoute(builder: (_) => ProviderBookingDetailScreen(booking: booking)),
+        );
+        if (updated != null) {
+          _checkAuthAndLoad();
+        }
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Row: Customer & Status Pill
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFEF4444)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    onPressed: () => _handleRejectBooking(booking),
-                    child: const Text('Reject', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 13)),
-                  ),
+                Text(
+                  booking.customerName ?? 'Neighborhood Resident',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    onPressed: () => _handleAcceptBooking(booking),
-                    child: const Text('Accept', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                  ),
-                ),
+                _buildStatusPill(booking.status),
               ],
             ),
+            const SizedBox(height: 8),
+
+            // Service Title & Scheduled Date
+            Text(
+              booking.serviceTitle ?? 'Service Request',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF374151), fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.calendar_today_outlined, size: 13, color: Color(0xFF6B7280)),
+                const SizedBox(width: 6),
+                Text(dateStr, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                if (booking.amount != null) ...[
+                  const SizedBox(width: 12),
+                  Text('•  ₹${booking.amount!.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF111827))),
+                ],
+              ],
+            ),
+
+            // Pending Actions: Accept / Reject
+            if (isPending) ...[
+              const Divider(height: 20, color: Color(0xFFF3F4F6)),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFEF4444)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      onPressed: () => _handleRejectBooking(booking),
+                      child: const Text('Reject', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 13)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      onPressed: () => _handleAcceptBooking(booking),
+                      child: const Text('Accept', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
