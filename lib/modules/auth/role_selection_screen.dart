@@ -128,11 +128,11 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   const SizedBox(height: 16),
                   _buildRoleCard(
                     index: 1,
-                    title: 'Shopkeeper',
+                    title: 'Business Owner',
                     subtitle: 'I own a shop or business\nin this neighbourhood',
                     icon: Icons.storefront_rounded,
-                    iconColor: const Color(0xFFF59E0B),
-                    iconBgColor: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                    iconColor: const Color(0xFFFF6B00),
+                    iconBgColor: const Color(0xFFFF6B00).withValues(alpha: 0.1),
                   ),
                   const SizedBox(height: 16),
                   _buildRoleCard(
@@ -142,6 +142,15 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                     icon: Icons.handyman_rounded,
                     iconColor: const Color(0xFF3B82F6),
                     iconBgColor: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildRoleCard(
+                    index: 3,
+                    title: 'Society Admin',
+                    subtitle: 'I manage society operations,\nresidents, visitors & facilities',
+                    icon: Icons.admin_panel_settings_rounded,
+                    iconColor: const Color(0xFF8B5CF6),
+                    iconBgColor: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
                   ),
                   const SizedBox(height: 32),
 
@@ -201,7 +210,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (context) => ProfileSetupScreen(
-                              initialRole: ['Resident', 'Shopkeeper', 'Service Provider'][_selectedRoleIndex],
+                              initialRole: ['Resident', 'Business Owner', 'Service Provider', 'Society Admin'][_selectedRoleIndex],
                             ),
                           ),
                         );

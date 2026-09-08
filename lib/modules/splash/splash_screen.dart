@@ -5,6 +5,9 @@ import '../../services/auth_service.dart';
 import '../dashboard/main_dashboard.dart';
 import '../auth/role_selection_screen.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+import '../auth/onboarding_screen.dart';
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -26,6 +29,9 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasSeenOnboarding = prefs.getBool('has_seen_onboarding') ?? false;
+
       final authService = AuthService();
       final hasSession = await authService.bootstrapSession();
 
@@ -41,9 +47,12 @@ class _SplashScreenState extends State<SplashScreen> {
           context,
         ).pushReplacement(MaterialPageRoute(builder: (context) => destination));
       } else {
-        // No token found, go to Login
+        // If not seen onboarding, show onboarding screens first
+        final destination = hasSeenOnboarding
+            ? const LoginScreen()
+            : const OnboardingScreen();
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          MaterialPageRoute(builder: (context) => destination),
         );
       }
     } catch (e) {

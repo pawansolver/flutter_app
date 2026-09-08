@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../modules/dashboard/main_dashboard.dart';
+import '../../modules/business/screens/business_dashboard_screen.dart';
+import '../../modules/provider/provider_dashboard_screen.dart';
+import '../../modules/society/society_dashboard_screen.dart';
 
 // ─── App Colors ───────────────────────────────────────────────────
 class _AppColors {
@@ -34,14 +38,20 @@ const List<_Role> _roles = [
   _Role(
     id: 'business',
     title: 'Business Owner',
-    subtitle: 'Manage your business listings & leads',
+    subtitle: 'Manage products, offers & leads',
     icon: Icons.storefront_outlined,
   ),
   _Role(
     id: 'provider',
     title: 'Service Provider',
-    subtitle: 'Handle bookings & grow your client base',
+    subtitle: 'Handle bookings & service catalog',
     icon: Icons.handyman_outlined,
+  ),
+  _Role(
+    id: 'society_admin',
+    title: 'Society Admin',
+    subtitle: 'Manage residents, visitors & complaints',
+    icon: Icons.admin_panel_settings_outlined,
   ),
 ];
 
@@ -82,11 +92,10 @@ class _RoleSwitchSheetState extends State<_RoleSwitchSheet> {
 
     setState(() => _selectedRole = role.id);
 
-    Future.delayed(const Duration(milliseconds: 280), () {
+    Future.delayed(const Duration(milliseconds: 250), () {
       if (!mounted) return;
       Navigator.of(context).pop();
 
-      // Simulate navigation based on selected role
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -104,6 +113,36 @@ class _RoleSwitchSheetState extends State<_RoleSwitchSheet> {
           duration: const Duration(seconds: 2),
         ),
       );
+
+      // Role-based navigation
+      switch (role.id) {
+        case 'business':
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BusinessDashboardScreen()),
+          );
+          break;
+        case 'provider':
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ProviderDashboardScreen()),
+          );
+          break;
+        case 'society_admin':
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SocietyDashboardScreen()),
+          );
+          break;
+        case 'resident':
+        default:
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const MainDashboard()),
+            (route) => false,
+          );
+          break;
+      }
     });
   }
 

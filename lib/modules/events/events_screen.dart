@@ -163,8 +163,10 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
 
       if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
         final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,
-          timeLimit: const Duration(seconds: 5),
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 5),
+          ),
         );
         _userLat = pos.latitude;
         _userLng = pos.longitude;
@@ -514,6 +516,16 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
   Widget _buildMyRsvpsTab() {
     if (_isLoadingRsvps) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null && _myRsvps.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.error_outline,
+        title: 'Unable to Load RSVPs',
+        message: 'Could not retrieve your event RSVPs. Please check your connection and try again.',
+        actionLabel: 'Retry',
+        onAction: () => _loadMyRsvps(refresh: true),
+      );
     }
 
     if (_myRsvps.isEmpty) {

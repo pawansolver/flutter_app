@@ -1,0 +1,320 @@
+class BusinessCategoryModel {
+  final int id;
+  final String name;
+  final String? slug;
+  final String? icon;
+  final String? description;
+
+  BusinessCategoryModel({
+    required this.id,
+    required this.name,
+    this.slug,
+    this.icon,
+    this.description,
+  });
+
+  factory BusinessCategoryModel.fromJson(Map<String, dynamic> json) {
+    return BusinessCategoryModel(
+      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      name: json['name']?.toString() ?? 'General',
+      slug: json['slug']?.toString(),
+      icon: json['icon']?.toString(),
+      description: json['description']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'slug': slug,
+    'icon': icon,
+    'description': description,
+  };
+}
+
+class BusinessProfileModel {
+  final int id;
+  final int? userId;
+  final String businessName;
+  final int? categoryId;
+  final String categoryName;
+  final String? description;
+  final String? address;
+  final String? phone;
+  final String? email;
+  final String? website;
+  final String? operatingHours;
+  final String? bannerUrl;
+  final String? logoUrl;
+  final bool isVerified;
+  final double rating;
+  final int reviewCount;
+  final bool isOpen;
+
+  BusinessProfileModel({
+    required this.id,
+    this.userId,
+    required this.businessName,
+    this.categoryId,
+    this.categoryName = 'Local Business',
+    this.description,
+    this.address,
+    this.phone,
+    this.email,
+    this.website,
+    this.operatingHours,
+    this.bannerUrl,
+    this.logoUrl,
+    this.isVerified = false,
+    this.rating = 4.8,
+    this.reviewCount = 0,
+    this.isOpen = true,
+  });
+
+  factory BusinessProfileModel.fromJson(Map<String, dynamic> json) {
+    return BusinessProfileModel(
+      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '1') ?? 1,
+      userId: json['userId'] is int ? json['userId'] : int.tryParse(json['userId']?.toString() ?? ''),
+      businessName: json['businessName']?.toString() ?? json['name']?.toString() ?? 'My Business',
+      categoryId: json['categoryId'] is int ? json['categoryId'] : int.tryParse(json['categoryId']?.toString() ?? ''),
+      categoryName: json['categoryName']?.toString() ?? json['category']?.toString() ?? 'Local Business',
+      description: json['description']?.toString(),
+      address: json['address']?.toString() ?? json['location']?.toString(),
+      phone: json['phone']?.toString() ?? json['contactNumber']?.toString(),
+      email: json['email']?.toString(),
+      website: json['website']?.toString(),
+      operatingHours: json['operatingHours']?.toString() ?? '9:00 AM - 9:00 PM',
+      bannerUrl: json['bannerUrl']?.toString() ?? json['coverImage']?.toString(),
+      logoUrl: json['logoUrl']?.toString() ?? json['profileImage']?.toString(),
+      isVerified: json['isVerified'] == true,
+      rating: double.tryParse(json['rating']?.toString() ?? '4.8') ?? 4.8,
+      reviewCount: int.tryParse(json['reviewCount']?.toString() ?? '12') ?? 12,
+      isOpen: json['isOpen'] != false,
+    );
+  }
+
+  BusinessProfileModel copyWith({
+    String? businessName,
+    String? categoryName,
+    String? description,
+    String? address,
+    String? phone,
+    String? email,
+    String? website,
+    String? operatingHours,
+    String? bannerUrl,
+    String? logoUrl,
+    bool? isVerified,
+    double? rating,
+    int? reviewCount,
+    bool? isOpen,
+  }) {
+    return BusinessProfileModel(
+      id: id,
+      userId: userId,
+      businessName: businessName ?? this.businessName,
+      categoryId: categoryId,
+      categoryName: categoryName ?? this.categoryName,
+      description: description ?? this.description,
+      address: address ?? this.address,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      website: website ?? this.website,
+      operatingHours: operatingHours ?? this.operatingHours,
+      bannerUrl: bannerUrl ?? this.bannerUrl,
+      logoUrl: logoUrl ?? this.logoUrl,
+      isVerified: isVerified ?? this.isVerified,
+      rating: rating ?? this.rating,
+      reviewCount: reviewCount ?? this.reviewCount,
+      isOpen: isOpen ?? this.isOpen,
+    );
+  }
+}
+
+class BusinessProductModel {
+  final String id;
+  final int businessId;
+  final String name;
+  final String description;
+  final double price;
+  final double? originalPrice;
+  final String? imageUrl;
+  final bool inStock;
+  final String category;
+
+  BusinessProductModel({
+    required this.id,
+    required this.businessId,
+    required this.name,
+    this.description = '',
+    required this.price,
+    this.originalPrice,
+    this.imageUrl,
+    this.inStock = true,
+    this.category = 'General',
+  });
+
+  factory BusinessProductModel.fromJson(Map<String, dynamic> json) {
+    return BusinessProductModel(
+      id: json['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      businessId: json['businessId'] is int ? json['businessId'] : int.tryParse(json['businessId']?.toString() ?? '1') ?? 1,
+      name: json['name']?.toString() ?? 'Product',
+      description: json['description']?.toString() ?? '',
+      price: double.tryParse(json['price']?.toString() ?? '0') ?? 0.0,
+      originalPrice: double.tryParse(json['originalPrice']?.toString() ?? ''),
+      imageUrl: json['imageUrl']?.toString(),
+      inStock: json['inStock'] != false,
+      category: json['category']?.toString() ?? 'General',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'businessId': businessId,
+    'name': name,
+    'description': description,
+    'price': price,
+    'originalPrice': originalPrice,
+    'imageUrl': imageUrl,
+    'inStock': inStock,
+    'category': category,
+  };
+}
+
+class BusinessOfferModel {
+  final int id;
+  final int businessId;
+  final String title;
+  final String description;
+  final int discountPercent;
+  final String? promoCode;
+  final String validUntil;
+  final String? bannerUrl;
+  final bool isActive;
+
+  BusinessOfferModel({
+    required this.id,
+    required this.businessId,
+    required this.title,
+    required this.description,
+    required this.discountPercent,
+    this.promoCode,
+    required this.validUntil,
+    this.bannerUrl,
+    this.isActive = true,
+  });
+
+  factory BusinessOfferModel.fromJson(Map<String, dynamic> json) {
+    return BusinessOfferModel(
+      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '1') ?? 1,
+      businessId: json['businessId'] is int ? json['businessId'] : int.tryParse(json['businessId']?.toString() ?? '1') ?? 1,
+      title: json['title']?.toString() ?? json['offerTitle']?.toString() ?? 'Offer',
+      description: json['description']?.toString() ?? '',
+      discountPercent: int.tryParse(json['discountPercent']?.toString() ?? json['discount']?.toString() ?? '15') ?? 15,
+      promoCode: json['promoCode']?.toString(),
+      validUntil: json['validUntil']?.toString() ?? json['validTo']?.toString() ?? 'End of month',
+      bannerUrl: json['bannerUrl']?.toString() ?? json['imageUrl']?.toString(),
+      isActive: json['isActive'] != false,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'businessId': businessId,
+    'title': title,
+    'description': description,
+    'discountPercent': discountPercent,
+    'promoCode': promoCode,
+    'validUntil': validUntil,
+    'bannerUrl': bannerUrl,
+    'isActive': isActive,
+  };
+}
+
+class BusinessLeadModel {
+  final String id;
+  final int businessId;
+  final String customerName;
+  final String customerPhone;
+  final String inquiryType;
+  final String message;
+  final String status; // 'NEW', 'CONTACTED', 'CONVERTED', 'CLOSED'
+  final DateTime createdAt;
+
+  BusinessLeadModel({
+    required this.id,
+    required this.businessId,
+    required this.customerName,
+    required this.customerPhone,
+    required this.inquiryType,
+    required this.message,
+    this.status = 'NEW',
+    required this.createdAt,
+  });
+
+  factory BusinessLeadModel.fromJson(Map<String, dynamic> json) {
+    return BusinessLeadModel(
+      id: json['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      businessId: json['businessId'] is int ? json['businessId'] : 1,
+      customerName: json['customerName']?.toString() ?? 'Neighbour Resident',
+      customerPhone: json['customerPhone']?.toString() ?? '+91 98765 43210',
+      inquiryType: json['inquiryType']?.toString() ?? 'Product Availability',
+      message: json['message']?.toString() ?? 'Is this product available for immediate local delivery?',
+      status: json['status']?.toString().toUpperCase() ?? 'NEW',
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'businessId': businessId,
+    'customerName': customerName,
+    'customerPhone': customerPhone,
+    'inquiryType': inquiryType,
+    'message': message,
+    'status': status,
+    'createdAt': createdAt.toIso8601String(),
+  };
+}
+
+class BusinessReviewModel {
+  final int id;
+  final int businessId;
+  final String userName;
+  final String? userAvatar;
+  final double rating;
+  final String comment;
+  final String? replyText;
+  final DateTime? repliedAt;
+  final DateTime createdAt;
+
+  BusinessReviewModel({
+    required this.id,
+    required this.businessId,
+    required this.userName,
+    this.userAvatar,
+    required this.rating,
+    required this.comment,
+    this.replyText,
+    this.repliedAt,
+    required this.createdAt,
+  });
+
+  factory BusinessReviewModel.fromJson(Map<String, dynamic> json) {
+    return BusinessReviewModel(
+      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '1') ?? 1,
+      businessId: json['businessId'] is int ? json['businessId'] : 1,
+      userName: json['userName']?.toString() ?? json['user']?['fullName']?.toString() ?? 'Local Resident',
+      userAvatar: json['userAvatar']?.toString() ?? json['user']?['avatarUrl']?.toString(),
+      rating: double.tryParse(json['rating']?.toString() ?? '5') ?? 5.0,
+      comment: json['comment']?.toString() ?? '',
+      replyText: json['replyText']?.toString() ?? json['reply']?.toString(),
+      repliedAt: json['repliedAt'] != null ? DateTime.tryParse(json['repliedAt'].toString()) : null,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+    );
+  }
+}

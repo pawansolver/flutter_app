@@ -7,6 +7,7 @@ import '../modules/provider/provider_dashboard_screen.dart';
 import '../modules/community/community_groups_screen.dart';
 import '../modules/services/screens/services_marketplace_screen.dart';
 import '../modules/services/screens/my_service_bookings_screen.dart';
+import '../modules/business/screens/business_dashboard_screen.dart';
 import '../modules/settings/settings_screen.dart';
 import '../shared/widgets/role_switch_sheet.dart';
 import '../services/auth_service.dart';
@@ -332,8 +333,35 @@ class CustomDrawer extends StatelessWidget {
                     },
                   ),
                   _buildMenuItem(
-                    icon: Icons.toggle_on,
-                    title: 'Business Profile',
+                    icon: Icons.storefront_outlined,
+                    title: 'Business Hub',
+                    isSelected:
+                        context
+                            .findAncestorWidgetOfExactType<
+                              BusinessDashboardScreen
+                            >() !=
+                        null,
+                    onTap: () {
+                      final isCurrent =
+                          context
+                              .findAncestorWidgetOfExactType<
+                                BusinessDashboardScreen
+                              >() !=
+                          null;
+                      Navigator.pop(context);
+                      if (!isCurrent) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BusinessDashboardScreen(),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  _buildMenuItem(
+                    icon: Icons.switch_account_outlined,
+                    title: 'Switch Profile View',
                     hasSwitch: true,
                     onTap: () {
                       Navigator.pop(context);

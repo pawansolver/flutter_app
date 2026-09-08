@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../feed/home_screen.dart';
-import '../directory/directory_screen.dart';
+import '../discover/discover_screen.dart';
 import '../chat/chat_list_screen.dart';
 import '../profile/profile_screen.dart';
 
@@ -15,7 +15,7 @@ class _MainDashboardState extends State<MainDashboard> {
   int _selectedIndex = 0;
   final List<Widget> _pages = const [
     HomeScreen(),
-    DirectoryScreen(),
+    DiscoverScreen(),
     ChatListScreen(),
     ProfileScreen(),
   ];

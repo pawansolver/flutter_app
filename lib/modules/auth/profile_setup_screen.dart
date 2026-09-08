@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/api_config.dart';
 import '../../services/authenticated_dio.dart';
 import '../../shared/permission_guidance.dart';
-import '../dashboard/main_dashboard.dart';
+import 'permissions_prompt_screen.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   final String? initialRole;
@@ -41,6 +41,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _operatingHoursCtrl = TextEditingController();
   final _serviceCategoryCtrl = TextEditingController();
   final _hourlyRateCtrl = TextEditingController();
+  final _societyNameCtrl = TextEditingController();
+  final _towerBlockCtrl = TextEditingController();
+  final _flatNumberCtrl = TextEditingController();
+  final _designationCtrl = TextEditingController();
 
   String? _bannerUrl; // URL returned by backend after upload
   bool _isUploadingBanner = false;
@@ -51,9 +55,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   void initState() {
     super.initState();
     if (widget.initialRole != null) {
-      _selectedRole = widget.initialRole == 'Service Provider'
-          ? 'Provider'
-          : widget.initialRole!;
+      final role = widget.initialRole!;
+      if (role == 'Service Provider' || role == 'Provider') {
+        _selectedRole = 'Provider';
+      } else if (role == 'Business Owner' || role == 'Shopkeeper') {
+        _selectedRole = 'Business Owner';
+      } else if (role == 'Society Admin') {
+        _selectedRole = 'Society Admin';
+      } else {
+        _selectedRole = 'Resident';
+      }
     }
   }
 
@@ -262,21 +273,30 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     });
 
     try {
+      final roleKey = _selectedRole.toLowerCase() == 'business owner'
+          ? 'business'
+          : (_selectedRole.toLowerCase() == 'society admin' ? 'society_admin' : _selectedRole.toLowerCase());
+
       final Map<String, dynamic> data = {
-        "role": _selectedRole.toLowerCase(),
+        "role": roleKey,
         "fullName": _fullNameCtrl.text,
         "latitude": _latitude,
         "longitude": _longitude,
       };
 
-      if (_selectedRole.toLowerCase() == 'shopkeeper') {
+      if (_selectedRole.toLowerCase() == 'shopkeeper' || _selectedRole.toLowerCase() == 'business owner') {
         data["businessName"] = _businessNameCtrl.text;
         data["operatingHours"] = _operatingHoursCtrl.text;
         if (_bannerUrl != null) data["bannerUrl"] = _bannerUrl;
-      } else if (_selectedRole.toLowerCase() == 'provider') {
+      } else if (_selectedRole.toLowerCase() == 'provider' || _selectedRole.toLowerCase() == 'service provider') {
         data["serviceCategory"] = _serviceCategoryCtrl.text;
         data["hourlyRate"] = double.tryParse(_hourlyRateCtrl.text) ?? 0.0;
         data["availabilityDays"] = _selectedDays.toList();
+      } else if (_selectedRole.toLowerCase() == 'society admin') {
+        data["societyName"] = _societyNameCtrl.text;
+        data["towerBlock"] = _towerBlockCtrl.text;
+        data["flatNumber"] = _flatNumberCtrl.text;
+        data["designation"] = _designationCtrl.text;
       }
 
       final response = await _dio.put(
@@ -287,7 +307,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       if (response.statusCode == 200 && mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const MainDashboard()),
+          MaterialPageRoute(builder: (context) => const PermissionsPromptScreen()),
         );
       }
     } catch (e) {
@@ -403,9 +423,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       children: [
                         _buildRoleChip('Resident', Icons.home_rounded),
                         const SizedBox(width: 12),
-                        _buildRoleChip('Shopkeeper', Icons.storefront_rounded),
+                        _buildRoleChip('Business Owner', Icons.storefront_rounded),
                         const SizedBox(width: 12),
                         _buildRoleChip('Provider', Icons.handyman_rounded),
+                        const SizedBox(width: 12),
+                        _buildRoleChip('Society Admin', Icons.admin_panel_settings_rounded),
                       ],
                     ),
                   ),
@@ -587,9 +609,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   Widget _buildDynamicForm() {
     switch (_selectedRole.toLowerCase()) {
       case 'shopkeeper':
+      case 'business owner':
         return _buildShopkeeperForm();
       case 'provider':
+      case 'service provider':
         return _buildProviderForm();
+      case 'society admin':
+        return _buildSocietyAdminForm();
       case 'resident':
       default:
         return _buildResidentForm();
@@ -1018,6 +1044,49 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           label: 'Detect Base Location',
           subtitle: 'Tap to detect your live GPS location',
           loadingText: 'Fetching GPS coordinates...',
+          resultText: '',
+        ),
+      ],
+    );
+  }
+
+  // --- Society Admin Form ---
+  Widget _buildSocietyAdminForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildStyledInput(
+          'Society / RWA Name',
+          'e.g., Green Valley Apartments, Palm Heights',
+          Icons.apartment_rounded,
+          controller: _societyNameCtrl,
+        ),
+        const SizedBox(height: 16),
+        _buildStyledInput(
+          'Tower / Wing / Block',
+          'e.g., Tower B, Phase 2, Wing A',
+          Icons.domain_rounded,
+          controller: _towerBlockCtrl,
+        ),
+        const SizedBox(height: 16),
+        _buildStyledInput(
+          'Flat / Office Unit Number',
+          'e.g., Flat 402, Admin Office Ground Floor',
+          Icons.meeting_room_outlined,
+          controller: _flatNumberCtrl,
+        ),
+        const SizedBox(height: 16),
+        _buildStyledInput(
+          'Committee Role / Designation',
+          'e.g., President, Secretary, Facility Manager',
+          Icons.badge_outlined,
+          controller: _designationCtrl,
+        ),
+        const SizedBox(height: 24),
+        _buildLocationCard(
+          label: 'Detect Society GPS Location',
+          subtitle: 'Required to anchor society operations & residents',
+          loadingText: 'Detecting society boundary location...',
           resultText: '',
         ),
       ],

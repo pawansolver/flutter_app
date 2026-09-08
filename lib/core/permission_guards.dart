@@ -1,6 +1,7 @@
 /// SmartGali Flutter Core — Client-Side UI Permission Guards
 /// NOTE: Frontend guards control UI element visibility only.
 /// The backend REST API remains the authoritative security boundary.
+library;
 
 class UserEffectivePermissions {
   final int? userId;
