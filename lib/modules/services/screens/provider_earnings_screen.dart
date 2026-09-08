@@ -135,7 +135,9 @@ class _ProviderEarningsScreenState extends State<ProviderEarningsScreen> {
     final filtered = _getFilteredBookings();
     final totalEarned = filtered.fold<double>(0.0, (sum, b) => sum + (b.amount ?? 0.0));
     final completedCount = filtered.length;
-    final avgValue = completedCount > 0 ? (totalEarned / completedCount) : 0.0;
+    final avgValue = (completedCount > 0 && !totalEarned.isNaN && !totalEarned.isInfinite)
+        ? (totalEarned / completedCount)
+        : 0.0;
 
     return RefreshIndicator(
       onRefresh: _fetchEarnings,
@@ -261,7 +263,7 @@ class _ProviderEarningsScreenState extends State<ProviderEarningsScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                completedCount > 0 ? '₹${totalEarned.toStringAsFixed(0)}' : '--',
+                completedCount > 0 ? '₹${totalEarned.toStringAsFixed(0)}' : '₹0',
                 style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF065F46)),
               ),
               const SizedBox(height: 4),
@@ -313,7 +315,9 @@ class _ProviderEarningsScreenState extends State<ProviderEarningsScreen> {
                     const Text('Avg Booking Value', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
                     const SizedBox(height: 6),
                     Text(
-                      completedCount > 0 ? '₹${avgValue.toStringAsFixed(0)}' : '--',
+                      (completedCount > 0 && !avgValue.isNaN && !avgValue.isInfinite)
+                          ? '₹${avgValue.toStringAsFixed(0)}'
+                          : '--',
                       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
                     ),
                   ],

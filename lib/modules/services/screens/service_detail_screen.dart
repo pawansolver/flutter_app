@@ -225,11 +225,11 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               const Icon(Icons.star, size: 16, color: Color(0xFFF59E0B)),
               const SizedBox(width: 4),
               Text(
-                '${item.rating}',
+                item.rating > 0 ? item.rating.toStringAsFixed(1) : '--',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
               ),
               Text(
-                ' (${item.reviewsCount > 0 ? '${item.reviewsCount} reviews' : 'Verified Reviews'})',
+                ' (${item.reviewsCount > 0 ? '${item.reviewsCount} reviews' : 'No reviews yet'})',
                 style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
               ),
               const Spacer(),
@@ -299,7 +299,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                       const Text('Estimated Time', style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
                       const SizedBox(height: 4),
                       Text(
-                        item.duration ?? '1 hour',
+                        item.duration != null && item.duration!.isNotEmpty ? item.duration! : '--',
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
                       ),
                     ],
@@ -358,7 +358,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.providerName ?? 'Local Pro',
+                      item.providerName ?? 'Service Provider',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
                     ),
                     const SizedBox(height: 2),
@@ -368,7 +368,10 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                         style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                       )
                     else
-                      const Text('Verified Community Professional', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                      Text(
+                        item.isProviderVerified ? 'Verified Community Professional' : 'Community Service Professional',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                      ),
                   ],
                 ),
               ),
@@ -385,6 +388,22 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                       Icon(Icons.verified, size: 12, color: Color(0xFF10B981)),
                       SizedBox(width: 3),
                       Text('Verified', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF047857))),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.shield_outlined, size: 12, color: Color(0xFF6B7280)),
+                      SizedBox(width: 3),
+                      Text('Not verified', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFF6B7280))),
                     ],
                   ),
                 ),
@@ -414,7 +433,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
               ),
               Text(
-                '⭐ ${item.rating} / 5.0',
+                item.rating > 0 ? '⭐ ${item.rating.toStringAsFixed(1)} / 5.0' : '⭐ -- / 5.0',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFD97706)),
               ),
             ],

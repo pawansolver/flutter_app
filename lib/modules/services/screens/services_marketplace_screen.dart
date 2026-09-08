@@ -86,14 +86,14 @@ class _ServicesMarketplaceScreenState extends State<ServicesMarketplaceScreen> {
         );
         if (mounted) {
           setState(() {
-            _detectedLocation = 'Neighborhood • Within 2 km';
+            _detectedLocation = 'Nearby Services';
           });
         }
       } else {
-        if (mounted) setState(() => _detectedLocation = 'Neighborhood Area');
+        if (mounted) setState(() => _detectedLocation = 'Local Services');
       }
     } catch (_) {
-      if (mounted) setState(() => _detectedLocation = 'Local Community Area');
+      if (mounted) setState(() => _detectedLocation = 'Local Services');
     }
   }
 
@@ -691,21 +691,23 @@ class _ServicesMarketplaceScreenState extends State<ServicesMarketplaceScreen> {
               const Icon(Icons.person_outline, size: 14, color: Color(0xFF6B7280)),
               const SizedBox(width: 4),
               Text(
-                item.providerName ?? 'Local Pro',
+                item.providerName ?? 'Service Provider',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563), fontWeight: FontWeight.w500),
               ),
-              const SizedBox(width: 10),
-              const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFFF59E0B)),
-              const SizedBox(width: 2),
-              Text(
-                item.distance ?? 'Within 1.5 km',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-              ),
+              if (item.distance != null && item.distance!.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFFF59E0B)),
+                const SizedBox(width: 2),
+                Text(
+                  item.distance!,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                ),
+              ],
               const Spacer(),
               const Icon(Icons.star, size: 14, color: Color(0xFFF59E0B)),
               const SizedBox(width: 3),
               Text(
-                '${item.rating}',
+                item.rating > 0 ? item.rating.toStringAsFixed(1) : '--',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
               ),
               if (item.reviewsCount > 0)

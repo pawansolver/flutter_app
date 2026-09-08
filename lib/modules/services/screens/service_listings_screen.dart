@@ -402,11 +402,11 @@ class _ServiceListingsScreenState extends State<ServiceListingsScreen> {
               children: [
                 const Icon(Icons.person_outline, size: 14, color: Color(0xFF6B7280)),
                 const SizedBox(width: 4),
-                Text(item.providerName ?? 'Local Pro', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                Text(item.providerName ?? 'Service Provider', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 const Spacer(),
                 const Icon(Icons.star, size: 14, color: Color(0xFFF59E0B)),
                 const SizedBox(width: 2),
-                Text('${item.rating}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF111827))),
+                Text(item.rating > 0 ? item.rating.toStringAsFixed(1) : '--', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF111827))),
               ],
             ),
             const Divider(height: 20, color: Color(0xFFF3F4F6)),

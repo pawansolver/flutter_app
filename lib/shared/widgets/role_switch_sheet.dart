@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../modules/dashboard/main_dashboard.dart';
 import '../../modules/business/screens/business_dashboard_screen.dart';
 import '../../modules/provider/provider_dashboard_screen.dart';
@@ -92,7 +93,14 @@ class _RoleSwitchSheetState extends State<_RoleSwitchSheet> {
 
     setState(() => _selectedRole = role.id);
 
-    Future.delayed(const Duration(milliseconds: 250), () {
+    Future.delayed(const Duration(milliseconds: 250), () async {
+      if (!mounted) return;
+
+      try {
+        const storage = FlutterSecureStorage();
+        await storage.write(key: 'active_role', value: role.id);
+      } catch (_) {}
+
       if (!mounted) return;
       Navigator.of(context).pop();
 
@@ -117,19 +125,19 @@ class _RoleSwitchSheetState extends State<_RoleSwitchSheet> {
       // Role-based navigation
       switch (role.id) {
         case 'business':
-          Navigator.push(
+          Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const BusinessDashboardScreen()),
           );
           break;
         case 'provider':
-          Navigator.push(
+          Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const ProviderDashboardScreen()),
           );
           break;
         case 'society_admin':
-          Navigator.push(
+          Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const SocietyDashboardScreen()),
           );

@@ -39,24 +39,21 @@ class ServiceMarketplaceService {
     final token = await _sessionStore.readAccessToken();
     if (token == null || token.trim().isEmpty) return false;
 
-    final role = (await _sessionStore.readUserRole())?.toLowerCase().trim() ?? '';
-    // Supported provider roles
-    if (role == 'provider' ||
-        role == 'service_provider' ||
-        role == 'admin' ||
-        role == 'super_admin' ||
-        role == 'business') {
-      return true;
-    }
-
-    // Also check if current active role in storage is provider
+    // Check if current active role in storage is provider
     const storage = FlutterSecureStorage();
-    final activeRole = await storage.read(key: 'active_role');
+    final activeRole = (await storage.read(key: 'active_role'))?.toLowerCase().trim();
     if (activeRole == 'provider' || activeRole == 'service_provider') {
       return true;
     }
 
-    return true; // Graceful default for dev environment where user switches view via role sheet
+    // Check canonical primary role from auth session
+    final role = (await _sessionStore.readUserRole())?.toLowerCase().trim() ?? '';
+    if (role == 'provider' || role == 'service_provider') {
+      return true;
+    }
+
+    // Strict fail-closed: Deny resident, member, guest, unknown, or invalid roles
+    return false;
   }
 
   /// Retrieves the current logged in user ID

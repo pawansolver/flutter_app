@@ -220,7 +220,7 @@ class _ManageAvailabilityScreenState extends State<ManageAvailabilityScreen> {
             children: const [
               Icon(Icons.check_circle, color: Color(0xFF10B981), size: 20),
               SizedBox(width: 8),
-              Expanded(child: Text('Availability and schedule saved successfully')),
+              Expanded(child: Text('Availability status updated')),
             ],
           ),
           backgroundColor: const Color(0xFF111827),

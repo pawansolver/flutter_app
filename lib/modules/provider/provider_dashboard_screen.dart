@@ -24,11 +24,11 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
 
   bool _loading = true;
   String? _errorMessage;
-  bool _isAuthorized = true;
+  bool _isAuthorized = false;
 
   // Data
-  String _providerName = 'Local Service Pro';
-  bool _isVerified = true;
+  String _providerName = 'Not available';
+  bool _isVerified = false;
   bool _isOnline = true;
 
   List<ServiceListingModel> _services = [];
@@ -58,28 +58,36 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
         return;
       }
 
-      // Load Profile, Listings, and Bookings in parallel
+      // Load Profile, Listings, Bookings, and Reviews in parallel
       final results = await Future.wait([
         _service.getProviderProfile(),
         _service.getProviderListings().catchError((_) => <ServiceListingModel>[]),
         _service.getProviderBookings().catchError((_) => <ServiceBookingModel>[]),
+        _service.getReviews().catchError((_) => <ServiceReviewModel>[]),
       ]);
 
       final profile = results[0] as ServiceProviderProfileModel?;
       final services = results[1] as List<ServiceListingModel>;
       final bookings = results[2] as List<ServiceBookingModel>;
+      final reviews = results[3] as List<ServiceReviewModel>;
+
+      double calculatedRating = 0.0;
+      if (reviews.isNotEmpty) {
+        final sum = reviews.fold<int>(0, (prev, r) => prev + r.rating);
+        calculatedRating = sum / reviews.length;
+      }
 
       if (!mounted) return;
       setState(() {
         _isAuthorized = true;
-        _providerName = profile?.userName ?? 'Neighborhood Provider';
-        _isVerified = profile?.isVerified ?? true;
+        _providerName = profile?.userName ?? 'Not available';
+        _isVerified = profile?.isVerified ?? false;
         _services = services;
         _bookings = bookings;
         _stats = ProviderOverviewStats.fromData(
           services: services,
           bookings: bookings,
-          rating: 4.8,
+          rating: calculatedRating,
         );
         _loading = false;
       });
@@ -354,6 +362,26 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
+                    ] else ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.shield_outlined, size: 12, color: Color(0xFF6B7280)),
+                            SizedBox(width: 4),
+                            Text(
+                              'Not verified',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFF6B7280)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                     ],
                     Text(
                       _isOnline ? '• Online' : '• Offline',
@@ -451,7 +479,7 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
                 ),
                 _buildSummaryCard(
                   'Rating',
-                  '⭐ ${_stats.rating}',
+                  _stats.rating > 0 ? '⭐ ${_stats.rating.toStringAsFixed(1)}' : '--',
                   Icons.star_outline,
                   const Color(0xFFFF6B00),
                   cardWidth,
@@ -461,7 +489,7 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
                 ),
                 _buildSummaryCard(
                   'Earnings',
-                  '₹${_stats.earnings.toStringAsFixed(0)}',
+                  _stats.completedBookings > 0 ? '₹${_stats.earnings.toStringAsFixed(0)}' : '₹0',
                   Icons.account_balance_wallet_outlined,
                   const Color(0xFF047857),
                   cardWidth,
@@ -999,7 +1027,7 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               ),
               onPressed: () {
-                showRoleSwitchSheet(context, currentRole: 'provider');
+                showRoleSwitchSheet(context, currentRole: 'resident');
               },
               child: const Text('Switch to Provider Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),

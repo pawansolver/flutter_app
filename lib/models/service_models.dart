@@ -152,7 +152,7 @@ class ServiceListingModel {
     this.providerAvatar,
     this.providerExperience,
     this.isProviderVerified = false,
-    this.rating = 4.8,
+    this.rating = 0.0,
     this.reviewsCount = 0,
     this.distance,
   });
@@ -174,11 +174,11 @@ class ServiceListingModel {
       categoryName: catObj?['serviceCategoryName']?.toString() ?? json['categoryName']?.toString() ?? 'General',
       categoryId: _asInt(providerObj?['service_category_id'] ?? json['categoryId']),
       bookingsCount: _asInt(json['bookingsCount'] ?? json['booking_count']) ?? 0,
-      providerName: userObj?['userName']?.toString() ?? json['providerName']?.toString() ?? 'Verified Local Pro',
+      providerName: userObj?['userName']?.toString() ?? json['providerName']?.toString(),
       providerAvatar: userObj?['profile_image']?.toString() ?? json['providerAvatar']?.toString(),
       providerExperience: providerObj?['experience']?.toString() ?? json['experience']?.toString(),
-      isProviderVerified: _asBool(providerObj?['is_verified'] ?? json['is_verified'], defaultValue: true),
-      rating: _asDouble(json['rating']) ?? 4.8,
+      isProviderVerified: _asBool(providerObj?['is_verified'] ?? json['is_verified'], defaultValue: false),
+      rating: _asDouble(json['rating']) ?? 0.0,
       reviewsCount: _asInt(json['reviews_count'] ?? json['reviewsCount']) ?? 0,
       distance: json['distance']?.toString(),
     );
@@ -384,7 +384,7 @@ class ProviderOverviewStats {
   factory ProviderOverviewStats.fromData({
     required List<ServiceListingModel> services,
     required List<ServiceBookingModel> bookings,
-    double rating = 4.8,
+    double rating = 0.0,
   }) {
     int pending = 0;
     int upcoming = 0;
