@@ -10,6 +10,7 @@ import 'business_leads_screen.dart';
 import 'business_reviews_screen.dart';
 import 'business_analytics_screen.dart';
 import 'business_subscription_screen.dart';
+import 'business_detail_screen.dart';
 
 class BusinessDashboardScreen extends StatefulWidget {
   const BusinessDashboardScreen({super.key});
@@ -50,6 +51,19 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
 
     try {
       final profile = await _service.getMyBusinessProfile();
+      if (profile == null) {
+        if (!mounted) return;
+        setState(() {
+          _profile = null;
+          _products = [];
+          _offers = [];
+          _leads = [];
+          _reviews = [];
+          _isLoading = false;
+        });
+        return;
+      }
+
       final products = await _service.getProducts(profile.id);
       final offers = await _service.getOffers(profile.id);
       final leads = await _service.getLeads(profile.id);
@@ -112,11 +126,15 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
         _handleBack();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF3F4F6),
+        backgroundColor: const Color(0xFFF8FAFC),
         drawer: const CustomDrawer(),
         appBar: AppBar(
           backgroundColor: Colors.white,
-          elevation: 0.5,
+          elevation: 0,
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(color: const Color(0xFFE2E8F0), height: 1),
+          ),
           leading: Builder(
             builder: (ctx) => IconButton(
               icon: const Icon(Icons.menu, color: _primaryDark),
@@ -153,21 +171,20 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
             ],
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.tune_rounded, color: _primaryDark),
-              tooltip: 'Edit Business Profile',
-              onPressed: _profile == null
-                  ? null
-                  : () async {
-                      final updated = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => EditBusinessProfileScreen(profile: _profile!),
-                        ),
-                      );
-                      if (updated == true) _loadAllData();
-                    },
-            ),
+            if (_profile != null)
+              IconButton(
+                icon: const Icon(Icons.tune_rounded, color: _primaryDark),
+                tooltip: 'Edit Business Profile',
+                onPressed: () async {
+                  final updated = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditBusinessProfileScreen(profile: _profile!),
+                    ),
+                  );
+                  if (updated == true) _loadAllData();
+                },
+              ),
             IconButton(
               icon: const Icon(Icons.home_outlined, color: _primaryDark),
               tooltip: 'Resident Home',
@@ -181,33 +198,185 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
               )
             : _error != null
                 ? _buildErrorState()
-                : RefreshIndicator(
-                    color: _brandOrange,
-                    onRefresh: _loadAllData,
-                    child: SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.only(bottom: 32),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildProfileHeader(),
-                          const SizedBox(height: 16),
-                          _buildKpiMetricsGrid(),
-                          const SizedBox(height: 20),
-                          _buildQuickActionsGrid(),
-                          const SizedBox(height: 24),
-                          _buildRecentLeadsSection(),
-                          const SizedBox(height: 24),
-                          _buildActiveOffersSection(),
-                          const SizedBox(height: 24),
-                          _buildProductsSection(),
-                          const SizedBox(height: 24),
-                          _buildReviewsSummarySection(),
-                        ],
+                : _profile == null
+                    ? _buildFirstTimeOnboardingState()
+                    : RefreshIndicator(
+                        color: _brandOrange,
+                        onRefresh: _loadAllData,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.only(bottom: 32),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildProfileHeader(),
+                              const SizedBox(height: 16),
+                              _buildKpiMetricsGrid(),
+                              const SizedBox(height: 20),
+                              _buildQuickActionsGrid(),
+                              const SizedBox(height: 24),
+                              _buildRecentLeadsSection(),
+                              const SizedBox(height: 24),
+                              _buildActiveOffersSection(),
+                              const SizedBox(height: 24),
+                              _buildProductsSection(),
+                              const SizedBox(height: 24),
+                              _buildReviewsSummarySection(),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
       ),
+    );
+  }
+
+  // ── First-Time Business Profile Onboarding (GAP 1) ──────────────────────────
+  Widget _buildFirstTimeOnboardingState() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: _brandOrange.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.storefront_rounded,
+                  size: 44,
+                  color: _brandOrange,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Create Your Business Profile',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: _primaryDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Set up your local business so people in your area can discover you.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: _subGrey,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  children: [
+                    _buildOnboardingBenefit(
+                      icon: Icons.location_on_outlined,
+                      title: 'Local Discovery',
+                      subtitle: 'Showcase your storefront to neighbours within your locality.',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildOnboardingBenefit(
+                      icon: Icons.inventory_2_outlined,
+                      title: 'Catalog & Offers',
+                      subtitle: 'Publish products and special discounts to attract customers.',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildOnboardingBenefit(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      title: 'Direct Inquiries',
+                      subtitle: 'Receive instant calls, WhatsApp messages, and direct leads.',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final created = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const EditBusinessProfileScreen(profile: null),
+                      ),
+                    );
+                    if (created == true) {
+                      _loadAllData();
+                    }
+                  },
+                  icon: const Icon(Icons.add_business_rounded, color: Colors.white, size: 20),
+                  label: const Text(
+                    'Create Business Profile',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _brandOrange,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOnboardingBenefit({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: _brandOrange),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _primaryDark),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(fontSize: 11, color: _subGrey, height: 1.3),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -263,6 +432,24 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                             color: _brandGreen,
                             size: 18,
                           ),
+                        ] else ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F4F6),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: const Text(
+                              'Not verified',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: _subGrey,
+                              ),
+                            ),
+                          ),
                         ],
                       ],
                     ),
@@ -298,7 +485,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
           const SizedBox(height: 12),
           // Store Status Toggle Bar
           Row(
@@ -345,6 +532,57 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => BusinessDetailScreen(business: p),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.visibility_outlined, size: 16, color: _primaryDark),
+                  label: const Text(
+                    'Preview Storefront',
+                    style: TextStyle(color: _primaryDark, fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final updated = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditBusinessProfileScreen(profile: p),
+                      ),
+                    );
+                    if (updated == true) _loadAllData();
+                  },
+                  icon: const Icon(Icons.edit_outlined, size: 16, color: _brandOrange),
+                  label: const Text(
+                    'Edit Profile',
+                    style: TextStyle(color: _brandOrange, fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    side: const BorderSide(color: _brandOrange),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -365,27 +603,27 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
               value: '--',
               icon: Icons.visibility_outlined,
               color: const Color(0xFF3B82F6),
-              trend: 'No data',
+              trend: 'No data yet',
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: _buildMetricCard(
               title: 'New Leads',
-              value: newLeadsCount.toString(),
+              value: newLeadsCount > 0 ? newLeadsCount.toString() : '--',
               icon: Icons.phone_in_talk_outlined,
               color: _brandOrange,
-              trend: 'Action needed',
+              trend: newLeadsCount > 0 ? '$newLeadsCount pending' : 'No new leads',
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: _buildMetricCard(
               title: 'Active Offers',
-              value: activeOffersCount.toString(),
+              value: activeOffersCount > 0 ? activeOffersCount.toString() : '--',
               icon: Icons.local_offer_outlined,
               color: _brandGreen,
-              trend: 'Live locally',
+              trend: activeOffersCount > 0 ? '$activeOffersCount active' : 'No active offers',
             ),
           ),
         ],
@@ -405,7 +643,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
       decoration: BoxDecoration(
         color: _cardBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -430,6 +668,8 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
           const SizedBox(height: 2),
           Text(
             title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontSize: 12,
               color: _subGrey,
@@ -439,6 +679,8 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
           const SizedBox(height: 4),
           Text(
             trend,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w600,
@@ -472,7 +714,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 1.05,
+            childAspectRatio: 0.90,
             children: [
               _buildActionTile(
                 icon: Icons.inventory_2_outlined,
@@ -550,12 +792,12 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
               _buildActionTile(
                 icon: Icons.verified_outlined,
                 title: 'Plan & Tier',
-                subtitle: 'Free Local',
+                subtitle: _profile!.isVerified ? 'Verified Local' : 'Free Local',
                 color: const Color(0xFF0D9488),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const BusinessSubscriptionScreen(),
+                    builder: (_) => BusinessSubscriptionScreen(isVerified: _profile!.isVerified),
                   ),
                 ),
               ),
@@ -582,7 +824,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Stack(
           children: [
@@ -705,7 +947,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -827,7 +1069,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
@@ -932,7 +1174,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
@@ -1053,7 +1295,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1093,7 +1335,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFFF9FAFB),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1122,7 +1364,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Center(
         child: Text(

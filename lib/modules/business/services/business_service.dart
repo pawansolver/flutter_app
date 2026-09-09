@@ -18,36 +18,49 @@ class BusinessService {
   final List<BusinessReviewModel> _sessionReviews = [];
 
   // ── Profile Methods ──────────────────────────────────────────────────────────
-  Future<BusinessProfileModel> getMyBusinessProfile() async {
+  Future<BusinessProfileModel?> getMyBusinessProfile() async {
     try {
       final response = await _dio.get('${ApiConfig.baseUrl}/business-profile/me');
       if (response.statusCode == 200 && response.data != null) {
         final profileData = response.data['data'] ?? response.data;
-        _cachedProfile = BusinessProfileModel.fromJson(profileData);
-        return _cachedProfile!;
+        if (profileData != null && profileData is Map<String, dynamic> && profileData.isNotEmpty) {
+          _cachedProfile = BusinessProfileModel.fromJson(profileData);
+          return _cachedProfile;
+        }
       }
     } catch (_) {
-      // Fallback if backend route not seeded yet
+      // Endpoint returned 404 or unauthenticated/unseeded
     }
 
-    if (_cachedProfile != null) return _cachedProfile!;
+    // Return session profile if created during this run, otherwise return null
+    // so the UI can honestly present the first-time profile creation state.
+    return _cachedProfile;
+  }
 
-    // Honest initial profile with no fake ratings or invented hours
-    _cachedProfile = BusinessProfileModel(
-      id: 1,
-      businessName: 'My Local Business',
-      categoryName: 'General Store',
-      description: 'Add your business description here to reach neighbours.',
-      address: null,
-      phone: null,
-      email: null,
-      website: null,
-      operatingHours: null,
-      isVerified: false,
-      rating: null,
-      reviewCount: null,
-      isOpen: true,
-    );
+  Future<BusinessProfileModel> createBusinessProfile(BusinessProfileModel newProfile) async {
+    _cachedProfile = newProfile;
+    try {
+      final response = await _dio.post(
+        '${ApiConfig.baseUrl}/business-profile',
+        data: {
+          'name': newProfile.businessName,
+          'category': newProfile.categoryName,
+          'description': newProfile.description,
+          'address': newProfile.address,
+          'contactNumber': newProfile.phone,
+          'operatingHours': newProfile.operatingHours,
+          'isOpen': newProfile.isOpen,
+        },
+      );
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = response.data['data'] ?? response.data;
+        if (data is Map<String, dynamic>) {
+          _cachedProfile = BusinessProfileModel.fromJson(data);
+        }
+      }
+    } catch (_) {
+      // Resilient local creation
+    }
     return _cachedProfile!;
   }
 
@@ -58,6 +71,7 @@ class BusinessService {
         '${ApiConfig.baseUrl}/business-profile/${updated.id}',
         data: {
           'name': updated.businessName,
+          'category': updated.categoryName,
           'description': updated.description,
           'address': updated.address,
           'contactNumber': updated.phone,
@@ -68,6 +82,13 @@ class BusinessService {
     } catch (_) {
       // Resilient local update
     }
+  }
+
+  Future<void> deleteBusinessProfile(int id) async {
+    _cachedProfile = null;
+    try {
+      await _dio.delete('${ApiConfig.baseUrl}/business-profile/$id');
+    } catch (_) {}
   }
 
   // ── Public Directory & Discovery Methods ──────────────────────────────────────

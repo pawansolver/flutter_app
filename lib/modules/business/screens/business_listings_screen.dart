@@ -41,7 +41,7 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
   static const Color _brandGreen = Color(0xFF10B981);
   static const Color _primaryDark = Color(0xFF111827);
   static const Color _subGrey = Color(0xFF6B7280);
-  static const Color _bgGrey = Color(0xFFE1EAE4);
+  static const Color _bgGrey = Color(0xFFF8FAFC);
 
   @override
   void initState() {
@@ -182,7 +182,7 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
           ),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1.0),
-            child: Container(color: const Color(0xFFE5E7EB), height: 1.0),
+            child: Container(color: const Color(0xFFE2E8F0), height: 1.0),
           ),
         ),
         body: RefreshIndicator(
@@ -222,7 +222,7 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.03),
@@ -255,39 +255,51 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
     );
   }
 
-  // ── Radius Selector ────────────────────────────────────────────────────────
+  // ── Radius Selector (GAP 4) ─────────────────────────────────────────────────
   Widget _buildRadiusSelector() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: _radiusOptions.map((radius) {
-          final isSelected = _selectedRadius == radius;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(radius),
-              selected: isSelected,
-              onSelected: (val) {
-                if (val) setState(() => _selectedRadius = radius);
-              },
-              selectedColor: _brandOrange,
-              backgroundColor: Colors.white,
-              labelStyle: TextStyle(
-                color: isSelected ? Colors.white : _primaryDark,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                fontSize: 12,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: isSelected ? _brandOrange : const Color(0xFFE5E7EB),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: _radiusOptions.map((radius) {
+              final isSelected = _selectedRadius == radius;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(radius),
+                  selected: isSelected,
+                  onSelected: (val) {
+                    if (val) setState(() => _selectedRadius = radius);
+                  },
+                  selectedColor: _brandOrange,
+                  backgroundColor: Colors.white,
+                  labelStyle: TextStyle(
+                    color: isSelected ? Colors.white : _primaryDark,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    fontSize: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(
+                      color: isSelected ? _brandOrange : const Color(0xFFE2E8F0),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+              );
+            }).toList(),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Text(
+            'Radius preference selected (Actual GPS distance filtering is backend-dependent)',
+            style: TextStyle(fontSize: 11, color: _subGrey, fontStyle: FontStyle.italic),
+          ),
+        ),
+      ],
     );
   }
 
@@ -315,7 +327,7 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
                 side: BorderSide(
-                  color: _selectedCategoryId == null ? _primaryDark : const Color(0xFFE5E7EB),
+                  color: _selectedCategoryId == null ? _primaryDark : const Color(0xFFE2E8F0),
                 ),
               ),
             ),
@@ -338,7 +350,7 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                   side: BorderSide(
-                    color: isSelected ? _brandOrange : const Color(0xFFE5E7EB),
+                    color: isSelected ? _brandOrange : const Color(0xFFE2E8F0),
                   ),
                 ),
               ),
@@ -378,7 +390,7 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
             ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: Color(0xFFE5E7EB)),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
           ),
           const SizedBox(width: 8),
@@ -408,7 +420,7 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
             ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: Color(0xFFE5E7EB)),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
           ),
         ],
@@ -423,14 +435,19 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'Shops in Neighbourhood (${_filteredBusinesses.length})',
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: _primaryDark,
+          Expanded(
+            child: Text(
+              'Shops in Neighbourhood (${_filteredBusinesses.length})',
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: _primaryDark,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             _selectedRadius,
             style: const TextStyle(fontSize: 12, color: _subGrey, fontWeight: FontWeight.w500),
@@ -504,7 +521,7 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Try adjusting your search keywords, radius, or category filters.',
+                'Try adjusting your search keywords or category filters.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: _subGrey),
               ),
@@ -532,7 +549,7 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: _filteredBusinesses.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final business = _filteredBusinesses[index];
         return _buildBusinessCard(business);
@@ -557,7 +574,7 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.02),
@@ -579,7 +596,7 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3F4F6),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: b.logoUrl != null && b.logoUrl!.isNotEmpty
                       ? ClipRRect(
@@ -587,7 +604,7 @@ class _BusinessListingsScreenState extends State<BusinessListingsScreen> {
                           child: Image.network(
                             b.logoUrl!,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
+                            errorBuilder: (context, error, stackTrace) =>
                                 const Icon(Icons.storefront_rounded, color: _brandOrange),
                           ),
                         )

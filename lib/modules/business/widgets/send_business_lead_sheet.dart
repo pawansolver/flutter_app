@@ -113,6 +113,35 @@ class _SendBusinessLeadSheetState extends State<SendBusinessLeadSheet> {
     }
   }
 
+  InputDecoration _buildSheetInputDecoration({
+    required String labelText,
+    String? hintText,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+      hintText: hintText,
+      hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+      prefixIcon: Icon(icon, size: 20, color: const Color(0xFF64748B)),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _brandOrange, width: 1.8),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -123,7 +152,7 @@ class _SendBusinessLeadSheetState extends State<SendBusinessLeadSheet> {
       padding: EdgeInsets.only(
         left: 20,
         right: 20,
-        top: 20,
+        top: 12,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
       child: SingleChildScrollView(
@@ -131,40 +160,57 @@ class _SendBusinessLeadSheetState extends State<SendBusinessLeadSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCBD5E1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(
-                    'Contact ${widget.businessName}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: _primaryDark,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Contact ${widget.businessName}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: _primaryDark,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Send inquiry directly to shopkeeper leads desk',
+                        style: TextStyle(fontSize: 12, color: _subGrey),
+                      ),
+                    ],
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close),
+                  icon: const Icon(Icons.close_rounded, color: _subGrey),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Send an inquiry directly to the shopkeeper. They will receive this in their leads dashboard.',
-              style: TextStyle(fontSize: 12, color: _subGrey, height: 1.4),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
 
             // Inquiry Type Dropdown
             DropdownButtonFormField<String>(
-              value: _inquiryType,
-              decoration: InputDecoration(
+              initialValue: _inquiryType,
+              decoration: _buildSheetInputDecoration(
                 labelText: 'Inquiry Subject',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                icon: Icons.topic_outlined,
               ),
               items: const [
                 DropdownMenuItem(value: 'Product Availability', child: Text('Product Availability')),
@@ -177,34 +223,36 @@ class _SendBusinessLeadSheetState extends State<SendBusinessLeadSheet> {
                 if (val != null) setState(() => _inquiryType = val);
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
             TextField(
               controller: _nameCtrl,
-              decoration: InputDecoration(
+              decoration: _buildSheetInputDecoration(
                 labelText: 'Your Name *',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                hintText: 'Resident Name',
+                icon: Icons.person_outline,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
             TextField(
               controller: _phoneCtrl,
               keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
+              decoration: _buildSheetInputDecoration(
                 labelText: 'Contact Phone Number *',
                 hintText: '+91 98765 43210',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                icon: Icons.phone_outlined,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
             TextField(
               controller: _messageCtrl,
               maxLines: 3,
-              decoration: InputDecoration(
+              decoration: _buildSheetInputDecoration(
                 labelText: 'Inquiry Message *',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                hintText: 'Describe what you need or ask your question...',
+                icon: Icons.message_outlined,
               ),
             ),
             const SizedBox(height: 20),
@@ -212,7 +260,7 @@ class _SendBusinessLeadSheetState extends State<SendBusinessLeadSheet> {
             SizedBox(
               width: double.infinity,
               height: 48,
-              child: ElevatedButton(
+              child: ElevatedButton.icon(
                 onPressed: _isSubmitting ? null : _submitInquiry,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _brandOrange,
@@ -220,18 +268,19 @@ class _SendBusinessLeadSheetState extends State<SendBusinessLeadSheet> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  elevation: 0,
+                  elevation: 1,
                 ),
-                child: _isSubmitting
+                icon: _isSubmitting
                     ? const SizedBox(
-                        width: 20,
-                        height: 20,
+                        width: 18,
+                        height: 18,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                       )
-                    : const Text(
-                        'Send Inquiry to Shop',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                      ),
+                    : const Icon(Icons.send_rounded, size: 18, color: Colors.white),
+                label: Text(
+                  _isSubmitting ? 'Sending...' : 'Send Inquiry to Shop',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
               ),
             ),
           ],

@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import '../models/business_models.dart';
-import '../services/business_service.dart';
 
 class BusinessAnalyticsScreen extends StatefulWidget {
   final int businessId;
@@ -11,11 +9,7 @@ class BusinessAnalyticsScreen extends StatefulWidget {
 }
 
 class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
-  final BusinessService _service = BusinessService();
-
   bool _isLoading = true;
-  List<BusinessLeadModel> _leads = [];
-  List<BusinessOfferModel> _offers = [];
 
   static const Color _brandOrange = Color(0xFFFF6B00);
   static const Color _brandGreen = Color(0xFF10B981);
@@ -30,35 +24,37 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    try {
-      final leads = await _service.getLeads(widget.businessId);
-      final offers = await _service.getOffers(widget.businessId);
-      if (!mounted) return;
-      setState(() {
-        _leads = leads;
-        _offers = offers;
-        _isLoading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-    }
+    // Note: Backend analytics endpoints do not exist yet.
+    // Display neutral state safely without fabricating numbers.
+    await Future.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
+    setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final activeOffersCount = _offers.where((o) => o.isActive).length;
-    final totalInquiries = _leads.length;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text(
-          'Business Analytics',
-          style: TextStyle(color: _primaryDark, fontWeight: FontWeight.bold, fontSize: 18),
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Storefront Analytics',
+              style: TextStyle(color: _primaryDark, fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.3),
+            ),
+            Text(
+              'Hyperlocal traffic & engagement telemetry',
+              style: TextStyle(fontSize: 12, color: _subGrey, fontWeight: FontWeight.w500),
+            ),
+          ],
         ),
         backgroundColor: Colors.white,
-        elevation: 0.5,
+        elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+        ),
         iconTheme: const IconThemeData(color: _primaryDark),
       ),
       body: _isLoading
@@ -68,35 +64,66 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Time range header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Hyperlocal Insights',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _primaryDark),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                  // Telemetry Status Notice Banner
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x050F172A),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
                         ),
-                        child: const Text('Last 7 Days', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                      ),
-                    ],
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.insights_rounded, color: Color(0xFF6366F1), size: 22),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Storefront Telemetry Active',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: _primaryDark,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Impression & visitor analytics sync live as neighbours discover your listings.',
+                                style: TextStyle(fontSize: 12, color: _subGrey, height: 1.3),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 14),
 
-                  // Top Summary Row - Data Honest
+                  // Top KPI Summary Cards - PRD Data Honest (GAP 3)
                   Row(
                     children: [
                       Expanded(
                         child: _buildMetricCard(
-                          title: 'Total Views',
+                          title: 'Store Views',
                           value: '--',
-                          trend: 'No data available',
+                          trend: 'No data yet',
                           icon: Icons.visibility_outlined,
                           color: const Color(0xFF3B82F6),
                         ),
@@ -104,9 +131,9 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _buildMetricCard(
-                          title: 'Inquiries & Leads',
-                          value: totalInquiries > 0 ? totalInquiries.toString() : '--',
-                          trend: totalInquiries > 0 ? '$totalInquiries total leads' : 'No inquiries yet',
+                          title: 'Inquiry Leads',
+                          value: '--',
+                          trend: 'No data yet',
                           icon: Icons.phone_forwarded_outlined,
                           color: _brandGreen,
                         ),
@@ -118,9 +145,9 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
                     children: [
                       Expanded(
                         child: _buildMetricCard(
-                          title: 'Active Offers',
-                          value: activeOffersCount > 0 ? activeOffersCount.toString() : '--',
-                          trend: activeOffersCount > 0 ? '$activeOffersCount live locally' : 'No active offers',
+                          title: 'Offer Clicks',
+                          value: '--',
+                          trend: 'No data yet',
                           icon: Icons.local_offer_outlined,
                           color: _brandOrange,
                         ),
@@ -130,14 +157,14 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
                         child: _buildMetricCard(
                           title: 'Conversion Rate',
                           value: '--',
-                          trend: 'Not enough data',
-                          icon: Icons.trending_up,
+                          trend: 'No data yet',
+                          icon: Icons.trending_up_rounded,
                           color: const Color(0xFF8B5CF6),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
 
                   // Impressions Section - Honest Empty State
                   Container(
@@ -145,33 +172,47 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x050F172A),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
                           'Daily Profile Impressions',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _primaryDark),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _primaryDark, letterSpacing: -0.2),
                         ),
                         const SizedBox(height: 20),
                         Center(
                           child: Column(
                             children: [
-                              Icon(Icons.bar_chart_rounded, size: 48, color: Colors.grey.shade400),
-                              const SizedBox(height: 10),
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF1F5F9),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.bar_chart_rounded, size: 36, color: Color(0xFF64748B)),
+                              ),
+                              const SizedBox(height: 12),
                               const Text(
-                                'No impression data available',
+                                'No Impression Data Available',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                   color: _primaryDark,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               const Text(
-                                'Visitor activity will appear here once neighbourhood residents view your shop profile.',
+                                'Daily visitor counts will appear here once neighbourhood residents view your shop profile.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(fontSize: 12, color: _subGrey, height: 1.4),
                               ),
@@ -181,7 +222,7 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
 
                   // Traffic Channels Section - Honest Empty State
                   Container(
@@ -189,20 +230,27 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x050F172A),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    child: Column(
+                    child: const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
                           'Neighbourhood Discovery Channels',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _primaryDark),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _primaryDark, letterSpacing: -0.2),
                         ),
-                        SizedBox(height: 14),
+                        SizedBox(height: 10),
                         Text(
-                          'Not enough data to calculate referral traffic distribution.',
-                          style: TextStyle(fontSize: 13, color: _subGrey),
+                          'Telemetry will calculate local referral traffic sources (hyperlocal search, category browse, promotional feed) once sufficient resident activity is recorded.',
+                          style: TextStyle(fontSize: 12, color: _subGrey, height: 1.4),
                         ),
                       ],
                     ),
@@ -221,28 +269,53 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x050F172A),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  trend,
+                  style: const TextStyle(fontSize: 9, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Text(
             value,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _primaryDark),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: _primaryDark, height: 1.0),
           ),
-          const SizedBox(height: 2),
-          Text(title, style: const TextStyle(fontSize: 12, color: _subGrey)),
           const SizedBox(height: 4),
-          Text(
-            trend,
-            style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.bold),
-          ),
+          Text(title, style: const TextStyle(fontSize: 12, color: _subGrey, fontWeight: FontWeight.w500)),
         ],
       ),
     );

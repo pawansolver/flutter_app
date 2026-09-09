@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 class BusinessSubscriptionScreen extends StatelessWidget {
-  const BusinessSubscriptionScreen({super.key});
+  final bool isVerified;
+  const BusinessSubscriptionScreen({super.key, this.isVerified = false});
 
   static const Color _brandOrange = Color(0xFFFF6B00);
   static const Color _brandGreen = Color(0xFF10B981);
@@ -11,14 +12,27 @@ class BusinessSubscriptionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text(
-          'Business Plan & Tier',
-          style: TextStyle(color: _primaryDark, fontWeight: FontWeight.bold, fontSize: 18),
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Storefront Subscription & Plan',
+              style: TextStyle(color: _primaryDark, fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.3),
+            ),
+            Text(
+              'Merchant tier & hyperlocal society reach',
+              style: TextStyle(fontSize: 12, color: _subGrey, fontWeight: FontWeight.w500),
+            ),
+          ],
         ),
         backgroundColor: Colors.white,
-        elevation: 0.5,
+        elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+        ),
         iconTheme: const IconThemeData(color: _primaryDark),
       ),
       body: SingleChildScrollView(
@@ -28,19 +42,19 @@ class BusinessSubscriptionScreen extends StatelessWidget {
           children: [
             // Current Active Plan Card
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF111827), Color(0xFF1F2937)],
+                  colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: const [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: Color(0x1A0F172A),
+                    blurRadius: 16,
+                    offset: Offset(0, 6),
                   ),
                 ],
               ),
@@ -57,62 +71,90 @@ class BusinessSubscriptionScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Text(
-                          'CURRENT ACTIVE PLAN',
-                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
+                          'ACTIVE STOREFRONT TIER',
+                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                         ),
                       ),
-                      const Row(
-                        children: [
-                          Icon(Icons.verified, color: _brandGreen, size: 18),
-                          SizedBox(width: 4),
-                          Text(
-                            'VERIFIED',
-                            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
-                        ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isVerified ? _brandGreen.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isVerified ? Icons.verified_rounded : Icons.storefront_rounded,
+                              color: isVerified ? _brandGreen : const Color(0xFF94A3B8),
+                              size: 16,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              isVerified ? 'VERIFIED' : 'NOT VERIFIED',
+                              style: TextStyle(
+                                color: isVerified ? _brandGreen : const Color(0xFF94A3B8),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'SmartGali Verified Local',
-                    style: TextStyle(
+                  const SizedBox(height: 18),
+                  Text(
+                    isVerified ? 'SmartGali Verified Local' : 'SmartGali Free Local',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
                       fontWeight: FontWeight.w900,
+                      letterSpacing: -0.3,
                     ),
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Full hyperlocal neighborhood reach for registered storefronts.',
-                    style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+                    'Direct neighbourhood visibility across nearby residential towers.',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.3),
                   ),
                   const SizedBox(height: 16),
-                  const Divider(color: Color(0xFF374151)),
-                  const SizedBox(height: 12),
-                  _buildPlanFeatureDark('Hyperlocal discovery within 5km radius'),
+                  const Divider(color: Color(0xFF334155), height: 1),
+                  const SizedBox(height: 16),
+                  _buildPlanFeatureDark('Hyperlocal discovery within your neighborhood'),
                   _buildPlanFeatureDark('Unlimited product catalog listings'),
-                  _buildPlanFeatureDark('Neighbourhood promotional offer banners'),
-                  _buildPlanFeatureDark('Direct customer call & WhatsApp inquiries'),
-                  _buildPlanFeatureDark('0% Commission on direct customer sales'),
-                  _buildPlanFeatureDark('Verified Merchant Trust Badge'),
+                  _buildPlanFeatureDark('Promotional offer broadcasting to residents'),
+                  _buildPlanFeatureDark('Direct resident WhatsApp & phone inquiries'),
+                  _buildPlanFeatureDark('0% Commission on all direct sales'),
+                  _buildPlanFeatureDark(
+                    isVerified
+                        ? 'Verified Merchant Trust Badge (Active)'
+                        : 'Verified Merchant Trust Badge (Pending verification)',
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
 
             // Plan Details Info
             const Text(
               'Merchant Guarantee',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _primaryDark),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _primaryDark, letterSpacing: -0.2),
             ),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x050F172A),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
@@ -120,7 +162,7 @@ class BusinessSubscriptionScreen extends StatelessWidget {
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: _brandGreen.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.shield_outlined, color: _brandGreen, size: 24),
                   ),
@@ -131,11 +173,11 @@ class BusinessSubscriptionScreen extends StatelessWidget {
                       children: [
                         Text(
                           'Direct Local Connection',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _primaryDark),
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _primaryDark),
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'SmartGali connects you directly with neighbours without charging middleman commissions.',
+                          'SmartGali connects you directly with neighbours without charging middleman commissions or per-order fees.',
                           style: TextStyle(fontSize: 12, color: _subGrey, height: 1.3),
                         ),
                       ],
@@ -144,40 +186,48 @@ class BusinessSubscriptionScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
             // Support & Contact
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x050F172A),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Need Help or Custom Promos?',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _primaryDark),
+                    'Merchant Support & Assistance',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _primaryDark),
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Contact the SmartGali merchant support team for banner highlights or society sponsorship.',
-                    style: TextStyle(fontSize: 12, color: _subGrey),
+                    'Need assistance with your catalog, timing updates, or society reach? Contact the local merchant desk.',
+                    style: TextStyle(fontSize: 12, color: _subGrey, height: 1.3),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   OutlinedButton.icon(
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Support request sent to merchant desk.')),
                       );
                     },
-                    icon: const Icon(Icons.support_agent, size: 18, color: _brandOrange),
-                    label: const Text('Contact Merchant Desk', style: TextStyle(color: _brandOrange)),
+                    icon: const Icon(Icons.support_agent_rounded, size: 18, color: _brandOrange),
+                    label: const Text('Contact Merchant Desk', style: TextStyle(color: _brandOrange, fontWeight: FontWeight.w700)),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: _brandOrange),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
                   ),
                 ],
@@ -191,15 +241,15 @@ class BusinessSubscriptionScreen extends StatelessWidget {
 
   Widget _buildPlanFeatureDark(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
+      padding: const EdgeInsets.only(bottom: 10.0),
       child: Row(
         children: [
-          const Icon(Icons.check_circle, color: _brandGreen, size: 16),
+          const Icon(Icons.check_circle_rounded, color: _brandGreen, size: 17),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+              style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 13, fontWeight: FontWeight.w500),
             ),
           ),
         ],

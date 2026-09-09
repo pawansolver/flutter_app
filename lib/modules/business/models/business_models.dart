@@ -73,8 +73,8 @@ class BusinessProfileModel {
 
   bool get hasRating => rating != null && rating! > 0;
   String get formattedRating => rating != null ? rating!.toStringAsFixed(1) : '--';
-  String get formattedReviewCount => (reviewCount != null && reviewCount! > 0) ? '($reviewCount reviews)' : '(No reviews)';
-  String get displayOperatingHours => (operatingHours != null && operatingHours!.trim().isNotEmpty) ? operatingHours! : 'Hours not specified';
+  String get formattedReviewCount => (reviewCount != null && reviewCount! > 0) ? '($reviewCount reviews)' : 'No reviews yet';
+  String get displayOperatingHours => (operatingHours != null && operatingHours!.trim().isNotEmpty) ? operatingHours! : 'Hours not available';
 
   factory BusinessProfileModel.fromJson(Map<String, dynamic> json) {
     final rawRating = json['rating'] ?? json['avgRating'] ?? json['average_rating'];
@@ -95,7 +95,7 @@ class BusinessProfileModel {
           : int.tryParse(json['categoryId']?.toString() ?? json['category_id']?.toString() ?? ''),
       categoryName: json['category'] is Map
           ? (json['category']['name']?.toString() ?? 'Local Business')
-          : (json['categoryName']?.toString() ?? json['category']?.toString() ?? 'Local Business'),
+          : (json['categoryName']?.toString() ?? json['category_name']?.toString() ?? json['category']?.toString() ?? 'Local Business'),
       description: json['description']?.toString(),
       address: json['address']?.toString() ?? json['location']?.toString(),
       phone: json['phone']?.toString() ??
@@ -154,6 +154,26 @@ class BusinessProfileModel {
       isOpen: isOpen ?? this.isOpen,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'user_id': userId,
+    'business_name': businessName,
+    'category_id': categoryId,
+    'category_name': categoryName,
+    'description': description,
+    'address': address,
+    'phone': phone,
+    'email': email,
+    'website': website,
+    'operating_hours': operatingHours,
+    'banner_url': bannerUrl,
+    'logo_url': logoUrl,
+    'is_verified': isVerified,
+    'rating': rating,
+    'review_count': reviewCount,
+    'is_open': isOpen,
+  };
 }
 
 class BusinessProductModel {
@@ -233,11 +253,11 @@ class BusinessOfferModel {
     return BusinessOfferModel(
       id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '1') ?? 1,
       businessId: json['businessId'] is int ? json['businessId'] : int.tryParse(json['businessId']?.toString() ?? '1') ?? 1,
-      title: json['title']?.toString() ?? json['offerTitle']?.toString() ?? 'Offer',
+      title: json['title']?.toString() ?? json['offerTitle']?.toString() ?? 'Special Offer',
       description: json['description']?.toString() ?? '',
-      discountPercent: int.tryParse(json['discountPercent']?.toString() ?? json['discount']?.toString() ?? '15') ?? 15,
+      discountPercent: int.tryParse(json['discountPercent']?.toString() ?? json['discount']?.toString() ?? '') ?? 0,
       promoCode: json['promoCode']?.toString(),
-      validUntil: json['validUntil']?.toString() ?? json['validTo']?.toString() ?? 'End of month',
+      validUntil: json['validUntil']?.toString() ?? json['validTo']?.toString() ?? 'Limited period',
       bannerUrl: json['bannerUrl']?.toString() ?? json['imageUrl']?.toString(),
       isActive: json['isActive'] != false,
     );
@@ -281,10 +301,10 @@ class BusinessLeadModel {
     return BusinessLeadModel(
       id: json['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
       businessId: json['businessId'] is int ? json['businessId'] : 1,
-      customerName: json['customerName']?.toString() ?? 'Neighbour Resident',
-      customerPhone: json['customerPhone']?.toString() ?? '+91 98765 43210',
-      inquiryType: json['inquiryType']?.toString() ?? 'Product Availability',
-      message: json['message']?.toString() ?? 'Is this product available for immediate local delivery?',
+      customerName: json['customerName']?.toString() ?? json['customer_name']?.toString() ?? 'Resident Customer',
+      customerPhone: json['customerPhone']?.toString() ?? json['customer_phone']?.toString() ?? '',
+      inquiryType: json['inquiryType']?.toString() ?? json['inquiry_type']?.toString() ?? 'General Inquiry',
+      message: json['message']?.toString() ?? '',
       status: json['status']?.toString().toUpperCase() ?? 'NEW',
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
@@ -331,9 +351,9 @@ class BusinessReviewModel {
     return BusinessReviewModel(
       id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '1') ?? 1,
       businessId: json['businessId'] is int ? json['businessId'] : 1,
-      userName: json['userName']?.toString() ?? json['user']?['fullName']?.toString() ?? 'Local Resident',
+      userName: json['userName']?.toString() ?? json['user']?['fullName']?.toString() ?? 'Resident',
       userAvatar: json['userAvatar']?.toString() ?? json['user']?['avatarUrl']?.toString(),
-      rating: double.tryParse(json['rating']?.toString() ?? '5') ?? 5.0,
+      rating: double.tryParse(json['rating']?.toString() ?? '') ?? 0.0,
       comment: json['comment']?.toString() ?? '',
       replyText: json['replyText']?.toString() ?? json['reply']?.toString(),
       repliedAt: json['repliedAt'] != null ? DateTime.tryParse(json['repliedAt'].toString()) : null,

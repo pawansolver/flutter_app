@@ -79,7 +79,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
     final phone = _business.phone?.trim();
     if (phone == null || phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Phone number not available for this shop.')),
+        const SnackBar(content: Text('Contact unavailable for this shop.')),
       );
       return;
     }
@@ -98,7 +98,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
     final rawPhone = _business.phone?.replaceAll(RegExp(r'[^0-9]'), '');
     if (rawPhone == null || rawPhone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('WhatsApp contact not available for this shop.')),
+        const SnackBar(content: Text('Contact unavailable for this shop.')),
       );
       return;
     }
@@ -118,7 +118,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
     if (ownerUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Direct chat is currently unavailable for this shopkeeper.'),
+          content: Text('Direct chat is unavailable as no user account is linked to this business storefront.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -193,16 +193,25 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
             SliverAppBar(
-              expandedHeight: 240,
+              expandedHeight: 220,
               pinned: true,
-              elevation: 0.5,
-              backgroundColor: Colors.white,
-              iconTheme: const IconThemeData(color: _primaryDark),
+              elevation: 0,
+              backgroundColor: const Color(0xFF0F172A),
+              leading: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: CircleAvatar(
+                  backgroundColor: Colors.black.withValues(alpha: 0.35),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
+                ),
+              ),
               flexibleSpace: FlexibleSpaceBar(
                 background: _buildHeroHeader(),
               ),
@@ -226,10 +235,20 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
               delegate: _SliverTabBarDelegate(
                 TabBar(
                   controller: _tabController,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
                   labelColor: _brandOrange,
                   unselectedLabelColor: _subGrey,
                   indicatorColor: _brandOrange,
                   indicatorWeight: 3,
+                  dividerColor: Colors.transparent,
+                  overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                    if (states.contains(WidgetState.pressed)) {
+                      return _brandOrange.withValues(alpha: 0.1);
+                    }
+                    return null;
+                  }),
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 16),
                   labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   tabs: [
                     Tab(text: 'Products (${_products.length})'),
@@ -267,7 +286,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
           Image.network(
             _business.bannerUrl!,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(color: const Color(0xFFE5E7EB)),
+            errorBuilder: (context, error, stackTrace) => Container(color: const Color(0xFFE5E7EB)),
           )
         else
           Container(
@@ -308,9 +327,9 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
+                color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: _business.logoUrl != null && _business.logoUrl!.isNotEmpty
                   ? ClipRRect(
@@ -318,7 +337,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
                       child: Image.network(
                         _business.logoUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.store, color: _brandOrange),
+                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.store, color: _brandOrange),
                       ),
                     )
                   : const Center(
@@ -345,6 +364,24 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
                       if (_business.isVerified) ...[
                         const SizedBox(width: 6),
                         const Icon(Icons.verified, color: _brandGreen, size: 18),
+                      ] else ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: const Text(
+                            'Not verified',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: _subGrey,
+                            ),
+                          ),
+                        ),
                       ],
                     ],
                   ),
@@ -365,11 +402,22 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
                       Text(
                         _business.hasRating
                             ? '${_business.formattedRating} ${_business.formattedReviewCount}'
-                            : 'No ratings yet',
+                            : 'Rating: -- (No reviews yet)',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: _primaryDark,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.near_me_outlined, color: _subGrey, size: 14),
+                      const SizedBox(width: 3),
+                      const Text(
+                        '--',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _subGrey,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -459,7 +507,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              side: const BorderSide(color: Color(0xFFE5E7EB)),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
           ),
         ),
@@ -493,7 +541,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              side: const BorderSide(color: Color(0xFFE5E7EB)),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
           ),
         ),
@@ -501,37 +549,82 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
     );
   }
 
+  // ── Reusable Empty Tab State ──────────────────────────────────────────────
+  Widget _buildEmptyTabState({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    bool isScrollable = true,
+  }) {
+    final content = Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Icon(icon, size: 28, color: const Color(0xFF94A3B8)),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: _primaryDark,
+            ),
+          ),
+          const SizedBox(height: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 300),
+            child: Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: _subGrey,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (isScrollable) {
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: content,
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: content,
+    );
+  }
+
   // ── Products Tab ───────────────────────────────────────────────────────────
   Widget _buildProductsTab() {
     if (_products.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade400),
-              const SizedBox(height: 12),
-              const Text(
-                'No products listed yet',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _primaryDark),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'This shop has not uploaded a digital product catalog yet. You can chat or call directly to inquire.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: _subGrey),
-              ),
-            ],
-          ),
-        ),
+      return _buildEmptyTabState(
+        icon: Icons.inventory_2_outlined,
+        title: 'No products listed yet',
+        subtitle: 'This shop has not uploaded a digital product catalog yet. You can chat or call directly to inquire.',
       );
     }
 
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: _products.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final product = _products[index];
         return Container(
@@ -539,7 +632,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -548,8 +641,9 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
                 width: 64,
                 height: 64,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF3F4F6),
+                  color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: product.imageUrl != null && product.imageUrl!.isNotEmpty
                     ? ClipRRect(
@@ -557,7 +651,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
                         child: Image.network(
                           product.imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(Icons.image, color: Colors.grey),
+                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.image, color: Colors.grey),
                         ),
                       )
                     : const Icon(Icons.local_offer_outlined, color: _subGrey),
@@ -640,34 +734,17 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
   // ── Offers Tab ─────────────────────────────────────────────────────────────
   Widget _buildOffersTab() {
     if (_offers.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.local_offer_outlined, size: 48, color: Colors.grey.shade400),
-              const SizedBox(height: 12),
-              const Text(
-                'No active offers',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _primaryDark),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'This business does not have running promotions right now. Check back soon for festive and weekend deals.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: _subGrey),
-              ),
-            ],
-          ),
-        ),
+      return _buildEmptyTabState(
+        icon: Icons.local_offer_outlined,
+        title: 'No active offers',
+        subtitle: 'This business does not have running promotions right now. Check back soon for festive and weekend deals.',
       );
     }
 
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: _offers.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final offer = _offers[index];
         return Container(
@@ -675,7 +752,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -725,9 +802,9 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF3F4F6),
+                    color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFE5E7EB), style: BorderStyle.solid),
+                    border: Border.all(color: const Color(0xFFE2E8F0), style: BorderStyle.solid),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -790,7 +867,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Row(
               children: [
@@ -830,32 +907,18 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
           const SizedBox(height: 16),
 
           if (_reviews.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  children: [
-                    Icon(Icons.rate_review_outlined, size: 48, color: Colors.grey.shade400),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'No reviews yet',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _primaryDark),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Be the first neighbour to rate and review this shop!',
-                      style: TextStyle(fontSize: 13, color: _subGrey),
-                    ),
-                  ],
-                ),
-              ),
+            _buildEmptyTabState(
+              icon: Icons.rate_review_outlined,
+              title: 'No reviews yet',
+              subtitle: 'Be the first neighbour to rate and review this shop!',
+              isScrollable: false,
             )
           else
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _reviews.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final r = _reviews[index];
                 return Container(
@@ -863,7 +926,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -900,9 +963,9 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF9FAFB),
+                            color: const Color(0xFFF8FAFC),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -946,7 +1009,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -962,7 +1025,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
                       : 'No detailed description provided by this business.',
                   style: const TextStyle(fontSize: 13, color: _subGrey, height: 1.5),
                 ),
-                const Divider(height: 24, color: Color(0xFFE5E7EB)),
+                const Divider(height: 24, color: Color(0xFFE2E8F0)),
                 _buildInfoRow(
                   icon: Icons.access_time_rounded,
                   label: 'Operating Hours',
@@ -976,14 +1039,20 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
                     value: _business.address!,
                   ),
                 ],
-                if (_business.phone != null && _business.phone!.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _buildInfoRow(
-                    icon: Icons.phone_outlined,
-                    label: 'Contact',
-                    value: _business.phone!,
-                  ),
-                ],
+                const SizedBox(height: 12),
+                _buildInfoRow(
+                  icon: Icons.near_me_outlined,
+                  label: 'Distance',
+                  value: '--',
+                ),
+                const SizedBox(height: 12),
+                _buildInfoRow(
+                  icon: Icons.phone_outlined,
+                  label: 'Contact',
+                  value: (_business.phone != null && _business.phone!.trim().isNotEmpty)
+                      ? _business.phone!
+                      : 'Contact unavailable',
+                ),
                 if (_business.email != null && _business.email!.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   _buildInfoRow(
@@ -1041,9 +1110,10 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
+        border: const Border(top: BorderSide(color: Color(0xFFE2E8F0))),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -1110,7 +1180,10 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: Colors.white,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+      ),
       child: _tabBar,
     );
   }
