@@ -281,7 +281,9 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                         const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 18),
                         const SizedBox(width: 4),
                         Text(
-                          '${p.rating} (${p.reviewCount} reviews)',
+                          p.hasRating
+                              ? '${p.formattedRating} ${p.formattedReviewCount}'
+                              : 'No ratings yet',
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -360,10 +362,10 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
           Expanded(
             child: _buildMetricCard(
               title: 'Views (7d)',
-              value: '428',
+              value: '--',
               icon: Icons.visibility_outlined,
               color: const Color(0xFF3B82F6),
-              trend: '+18% nearby',
+              trend: 'No data',
             ),
           ),
           const SizedBox(width: 12),

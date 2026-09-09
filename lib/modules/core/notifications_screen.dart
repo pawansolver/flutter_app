@@ -4,10 +4,26 @@ import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/community_service.dart';
+import '../../services/service_marketplace_service.dart';
 import '../chat/chat_window_screen.dart';
 import '../community/community_detail_screen.dart';
+import '../events/event_detail_screen.dart';
+import '../profile/user_profile_screen.dart';
+import '../services/screens/booking_detail_screen.dart';
+import '../services/screens/provider_booking_detail_screen.dart';
+import '../services/screens/provider_reviews_screen.dart';
+import '../society/society_dashboard_screen.dart';
+import '../society/society_operations_screen.dart';
 import 'notification_service.dart';
+import 'widgets/notification_card.dart';
 
+/// Top filter for the notification center: strictly "All" and "Unread" as per PRD.
+enum _NotificationTab { all, unread }
+
+/// SmartGali Notification Center Screen
+/// Implements PRD-compliant notifications list with date grouping (Today, Yesterday, Earlier),
+/// All/Unread filters, live unread badge, shimmer loading, empty state, pull-to-refresh,
+/// pagination, and safe deep-link navigation into existing screens.
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -18,29 +34,36 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   final NotificationService _service = NotificationService();
+  final ScrollController _scrollController = ScrollController();
 
   // ── State ──────────────────────────────────────────────────────────────
   final List<AppNotification> _all = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
   bool _isMarkingAll = false;
   bool _isClearingRead = false;
   String? _error;
   int _unreadCount = 0;
 
+  // Pagination
+  int _currentPage = 1;
+  int _totalPages = 1;
+  bool get _hasMore => _currentPage < _totalPages;
+
   // ── Tabs ───────────────────────────────────────────────────────────────
   late final TabController _tabController;
-  final _tabs = NotificationCategory.values;
+  final List<_NotificationTab> _tabs = [_NotificationTab.all, _NotificationTab.unread];
 
   // ── Polling ────────────────────────────────────────────────────────────
   Timer? _pollTimer;
-  static const Duration _pollInterval = Duration(seconds: 15);
+  static const Duration _pollInterval = Duration(seconds: 20);
 
-  // ── Constants ──────────────────────────────────────────────────────────
+  // ── Design Tokens ──────────────────────────────────────────────────────
   static const _orange = Color(0xFFFF6B00);
   static const _green = Color(0xFF10B981);
   static const _dark = Color(0xFF111827);
   static const _grey = Color(0xFF6B7280);
-  static const _bgColor = Color(0xFFE1EAE4);
+  static const _bgColor = Color(0xFFF3F4F6);
   static const _divider = Color(0xFFE5E7EB);
 
   @override
@@ -48,6 +71,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
     _tabController.addListener(() => setState(() {}));
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addObserver(this);
     _loadNotifications();
     _startPolling();
@@ -57,6 +81,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   void dispose() {
     _pollTimer?.cancel();
     _tabController.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -76,15 +102,57 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     _pollTimer = Timer.periodic(_pollInterval, (_) => _refreshSilently());
   }
 
-  // ── Filtered list for the current tab ─────────────────────────────────
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (_hasMore && !_isLoading && !_isLoadingMore) {
+        _loadMoreNotifications();
+      }
+    }
+  }
+
+  // ── Filtered list for active tab ──────────────────────────────────────
   List<AppNotification> get _filtered {
-    final category = _tabs[_tabController.index];
-    if (category == NotificationCategory.unread) {
+    final currentTab = _tabs[_tabController.index];
+    if (currentTab == _NotificationTab.unread) {
       return _all.where((n) => !n.isRead).toList();
     }
-    final filters = category.typeFilters;
-    if (filters == null) return _all;
-    return _all.where((n) => filters.contains(n.type)).toList();
+    return _all;
+  }
+
+  // ── Date Grouping ─────────────────────────────────────────────────────
+  Map<String, List<AppNotification>> _groupNotifications(List<AppNotification> items) {
+    final Map<String, List<AppNotification>> groups = {
+      'Today': [],
+      'Yesterday': [],
+      'Earlier': [],
+    };
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    for (final item in items) {
+      if (item.createdAt == null) {
+        groups['Earlier']!.add(item);
+        continue;
+      }
+
+      final itemDate = DateTime(
+        item.createdAt!.year,
+        item.createdAt!.month,
+        item.createdAt!.day,
+      );
+
+      if (itemDate.isAtSameMomentAs(today)) {
+        groups['Today']!.add(item);
+      } else if (itemDate.isAtSameMomentAs(yesterday)) {
+        groups['Yesterday']!.add(item);
+      } else {
+        groups['Earlier']!.add(item);
+      }
+    }
+
+    return groups;
   }
 
   // ── Data fetching ──────────────────────────────────────────────────────
@@ -92,15 +160,20 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     setState(() {
       _isLoading = true;
       _error = null;
+      _currentPage = 1;
     });
-    final result = await _service.getMyNotifications(limit: 50);
+
+    final result = await _service.getMyNotifications(page: 1, limit: 25);
     if (!mounted) return;
+
     if (result.isSuccess && result.data != null) {
       setState(() {
         _all
           ..clear()
           ..addAll(result.data!.items);
         _unreadCount = result.data!.unreadCount;
+        _currentPage = result.data!.page;
+        _totalPages = result.data!.totalPages;
         _isLoading = false;
       });
     } else {
@@ -111,52 +184,80 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     }
   }
 
+  Future<void> _loadMoreNotifications() async {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() => _isLoadingMore = true);
+
+    final nextPage = _currentPage + 1;
+    final result = await _service.getMyNotifications(page: nextPage, limit: 25);
+    if (!mounted) return;
+
+    if (result.isSuccess && result.data != null) {
+      setState(() {
+        // Prevent duplicates
+        final existingIds = _all.map((e) => e.id).toSet();
+        for (final item in result.data!.items) {
+          if (!existingIds.contains(item.id)) {
+            _all.add(item);
+          }
+        }
+        _currentPage = result.data!.page;
+        _totalPages = result.data!.totalPages;
+        _unreadCount = result.data!.unreadCount;
+        _isLoadingMore = false;
+      });
+    } else {
+      setState(() => _isLoadingMore = false);
+    }
+  }
+
   Future<void> _refreshSilently() async {
-    final result = await _service.getMyNotifications(limit: 50);
+    final result = await _service.getMyNotifications(page: 1, limit: 25);
     if (!mounted || !result.isSuccess || result.data == null) return;
     setState(() {
       _all
         ..clear()
         ..addAll(result.data!.items);
       _unreadCount = result.data!.unreadCount;
+      _currentPage = result.data!.page;
+      _totalPages = result.data!.totalPages;
       _error = null;
     });
   }
 
-  // ── Actions ────────────────────────────────────────────────────────────
+  // ── Notification Actions ───────────────────────────────────────────────
 
-  /// Tap: mark single notification as read (optimistic update).
+  /// Tap: mark single notification as read (optimistic update) and navigate.
   Future<void> _onTapNotification(AppNotification notif) async {
-    // Deep-link routing based on payload data
-    await _handleDeepLink(notif);
+    if (!notif.isRead) {
+      final index = _all.indexWhere((n) => n.id == notif.id);
+      if (index != -1) {
+        setState(() {
+          _all[index] = notif.copyWith(isRead: true);
+          if (_unreadCount > 0) _unreadCount -= 1;
+        });
+      }
 
-    if (notif.isRead) return;
-    final index = _all.indexWhere((n) => n.id == notif.id);
-    if (index == -1) return;
-
-    setState(() {
-      _all[index] = notif.copyWith(isRead: true);
-      if (_unreadCount > 0) _unreadCount -= 1;
-    });
-
-    final result = await _service.markRead(notif.id);
-    if (!mounted) return;
-    if (!result.isSuccess) {
-      // Roll back optimistic update on failure.
-      setState(() {
-        _all[index] = notif.copyWith(isRead: false);
-        _unreadCount += 1;
-      });
-      _showSnack('Could not mark as read. Try again.');
+      // Background sync mark as read
+      unawaited(_service.markRead(notif.id).then((res) {
+        if (!res.isSuccess && mounted && index != -1) {
+          setState(() {
+            _all[index] = notif.copyWith(isRead: false);
+            _unreadCount += 1;
+          });
+        }
+      }));
     }
+
+    // Deep navigation
+    await _handleDeepLink(notif);
   }
 
-  /// Swipe-to-dismiss / button: delete single notification (optimistic).
+  /// Swipe-to-dismiss: delete single notification (optimistic).
   Future<void> _deleteNotification(AppNotification notif) async {
     final index = _all.indexWhere((n) => n.id == notif.id);
     if (index == -1) return;
 
-    // Optimistic remove
     setState(() {
       _all.removeAt(index);
       if (!notif.isRead && _unreadCount > 0) _unreadCount -= 1;
@@ -165,7 +266,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     final result = await _service.deleteNotification(notif.id);
     if (!mounted) return;
     if (!result.isSuccess) {
-      // Restore on failure
       setState(() {
         _all.insert(index, notif);
         if (!notif.isRead) _unreadCount += 1;
@@ -192,9 +292,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         _unreadCount = 0;
         _isMarkingAll = false;
       });
+      _showSnack('All notifications marked as read.', isSuccess: true);
     } else {
       setState(() => _isMarkingAll = false);
-      _showSnack(result.error ?? 'Failed to update notifications');
+      _showSnack(result.error ?? 'Failed to mark all as read.');
     }
   }
 
@@ -206,14 +307,13 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       return;
     }
 
-    // Confirm dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'Clear Read Notifications',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         content: Text(
           'Delete ${readIds.length} read notification${readIds.length > 1 ? 's' : ''}? This cannot be undone.',
@@ -221,14 +321,15 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: _grey)),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Clear',
-              style: TextStyle(color: Colors.redAccent),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear'),
           ),
         ],
       ),
@@ -293,60 +394,40 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     }
   }
 
-  // ── Deep Link Routing ──────────────────────────────────────────────────
+  // ── Deep Link Navigation Dispatcher ────────────────────────────────────
 
-  /// Inspects `notification.data` and navigates to the relevant screen.
-  /// Enterprise pattern: all notification types have a `target` key.
   Future<void> _handleDeepLink(AppNotification notif) async {
     final target = notif.deepLinkTarget;
-    if (target == null) return;
-
     final data = notif.data ?? {};
 
-    switch (target) {
-      case 'post':
-        final postId = data['postId'];
-        if (postId != null) {
-          _showSnack('Opening post #$postId…', isSuccess: true);
-          // Navigator.push(context, MaterialPageRoute(
-          //   builder: (_) => PostDetailScreen(postId: postId),
-          // ));
-        }
-        break;
-      case 'profile':
-        final userId = data['userId'];
-        if (userId != null) {
-          _showSnack('Opening profile…', isSuccess: true);
-          // Navigator.push(context, MaterialPageRoute(
-          //   builder: (_) => UserProfileScreen(userId: userId),
-          // ));
-        }
-        break;
-      case 'chat':
-        final chatId = int.tryParse(data['chatId']?.toString() ?? '');
-        if (chatId != null && chatId > 0) {
-          final userId = await AuthService().getUserId();
-          if (!mounted) return;
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ChatWindowScreen(
-                chatId: chatId,
-                chatName: data['chatName']?.toString() ?? 'Chat',
-                currentUserId: userId ?? 0,
-                isOnline: false,
+    try {
+      switch (target) {
+        // 1. Chat Message
+        case 'chat':
+          final chatId = int.tryParse(data['chatId']?.toString() ?? '');
+          if (chatId != null && chatId > 0) {
+            final userId = await AuthService().getUserId();
+            if (!mounted) return;
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatWindowScreen(
+                  chatId: chatId,
+                  chatName: data['chatName']?.toString() ?? 'Chat',
+                  currentUserId: userId ?? 0,
+                  isOnline: false,
+                ),
               ),
-            ),
-          );
-        }
-        break;
-      case 'community':
-        final communityId = int.tryParse(data['communityId']?.toString() ?? '');
-        if (communityId != null && communityId > 0) {
-          try {
-            final community = await CommunityService().getCommunityDetails(
-              communityId,
             );
+            return;
+          }
+          break;
+
+        // 2. Community Update / Announcement
+        case 'community':
+          final communityId = int.tryParse(data['communityId']?.toString() ?? '');
+          if (communityId != null && communityId > 0) {
+            final community = await CommunityService().getCommunityDetails(communityId);
             if (!mounted) return;
             await Navigator.push(
               context,
@@ -354,17 +435,231 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 builder: (_) => CommunityDetailScreen(community: community),
               ),
             );
-          } catch (error) {
-            _showSnack(error.toString());
+            return;
           }
-        }
-        break;
-      default:
-        break;
+          break;
+
+        // 3. Event Reminder / New Event
+        case 'event':
+          final eventId = int.tryParse(data['eventId']?.toString() ?? '');
+          if (eventId != null && eventId > 0) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => EventDetailScreen(eventId: eventId),
+              ),
+            );
+            return;
+          }
+          break;
+
+        // 4. Follow Request / Profile
+        case 'profile':
+          final userId = int.tryParse(
+            (data['userId'] ?? data['targetUserId'] ?? data['senderId'])?.toString() ?? '',
+          );
+          if (userId != null && userId > 0) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => UserProfileScreen(
+                  userId: userId,
+                  userName: data['userName']?.toString() ?? 'User',
+                  fullName: data['fullName']?.toString(),
+                  avatarUrl: data['avatarUrl']?.toString(),
+                ),
+              ),
+            );
+            return;
+          }
+          break;
+
+        // 5. Service Bookings (Provider & Customer)
+        case 'booking':
+          final bookingId = int.tryParse(data['bookingId']?.toString() ?? '');
+          if (bookingId != null && bookingId > 0) {
+            final booking = await ServiceMarketplaceService().getBookingById(bookingId);
+            if (!mounted) return;
+
+            if (booking == null) {
+              _showSnack('This booking is no longer available.');
+              return;
+            }
+
+            final isProvider = data['isProvider'] == true ||
+                notif.type.toLowerCase().contains('request') ||
+                notif.type.toLowerCase().contains('provider');
+
+            if (isProvider) {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProviderBookingDetailScreen(booking: booking),
+                ),
+              );
+            } else {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BookingDetailScreen(booking: booking),
+                ),
+              );
+            }
+            return;
+          }
+          break;
+
+        // 6. Service Reviews
+        case 'review':
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const ProviderReviewsScreen(),
+            ),
+          );
+          return;
+
+        // 7. Society Operations (Complaints, Visitors, Notices)
+        case 'society':
+          final societyId = int.tryParse(data['societyId']?.toString() ?? '');
+          final t = notif.type.toLowerCase();
+          if (t.contains('complaint')) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SocietyOperationsScreen(
+                  initialTab: 0,
+                  societyId: societyId,
+                ),
+              ),
+            );
+            return;
+          } else if (t.contains('visitor')) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SocietyOperationsScreen(
+                  initialTab: 1,
+                  societyId: societyId,
+                ),
+              ),
+            );
+            return;
+          } else {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SocietyDashboardScreen(
+                  initialSocietyId: societyId,
+                ),
+              ),
+            );
+            return;
+          }
+
+        // 8. Like / Comment on Post
+        case 'post':
+          final postId = data['postId']?.toString();
+          _showPostInfoSheet(notif, postId);
+          return;
+
+        default:
+          break;
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnack('This content is no longer available or could not be loaded.');
+      }
+      return;
+    }
+
+    // Informational fallback when no direct screen navigation is matched
+    if (notif.message.isNotEmpty && mounted) {
+      _showSnack('${notif.title}: ${notif.message}', isSuccess: true);
     }
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────
+  void _showPostInfoSheet(AppNotification notif, String? postId) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: const Color(0xFFF43F5E).withValues(alpha: 0.15),
+                    child: const Icon(
+                      Icons.favorite_rounded,
+                      color: Color(0xFFF43F5E),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          notif.title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: _dark,
+                          ),
+                        ),
+                        if (postId != null)
+                          Text(
+                            'Post #$postId',
+                            style: const TextStyle(fontSize: 12, color: _grey),
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: _grey),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                notif.message,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF374151),
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _dark,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Close'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   void _showSnack(String msg, {bool isSuccess = false}) {
     if (!mounted) return;
@@ -379,45 +674,12 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     );
   }
 
-  ({IconData icon, Color color}) _visualsFor(String type) {
-    switch (type) {
-      case 'alert':
-        return (icon: Icons.warning_amber_rounded, color: _orange);
-      case 'reminder':
-        return (icon: Icons.event_note_outlined, color: Colors.blueGrey);
-      case 'message':
-        return (
-          icon: Icons.chat_bubble_outline,
-          color: const Color(0xFF3B82F6),
-        );
-      case 'system':
-        return (icon: Icons.settings_suggest_outlined, color: Colors.grey);
-      case 'like':
-        return (icon: Icons.favorite_border_rounded, color: Colors.pinkAccent);
-      case 'comment':
-        return (icon: Icons.comment_outlined, color: const Color(0xFF8B5CF6));
-      case 'follow':
-        return (icon: Icons.person_add_outlined, color: _green);
-      default:
-        return (icon: Icons.notifications_none_rounded, color: _green);
-    }
-  }
-
-  String _formatTime(DateTime? date) {
-    if (date == null) return '';
-    final diff = DateTime.now().difference(date);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${date.day}/${date.month}/${date.year}';
-  }
-
-  // ── Build ──────────────────────────────────────────────────────────────
+  // ── UI Builders ────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final readCount = _all.where((n) => n.isRead).length;
+
     return Scaffold(
       backgroundColor: _bgColor,
       appBar: _buildAppBar(readCount),
@@ -460,7 +722,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 '$_unreadCount',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -469,15 +731,14 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         ],
       ),
       actions: [
-        // Mark all read
         if (_isMarkingAll || _isClearingRead)
           const Padding(
-            padding: EdgeInsets.only(right: 8),
+            padding: EdgeInsets.only(right: 16),
             child: Center(
               child: SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(strokeWidth: 2, color: _orange),
               ),
             ),
           )
@@ -493,12 +754,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
               ),
             ),
           ),
-        // 3-dot overflow menu
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert, color: _dark),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           onSelected: (value) {
             if (value == 'clear_read') _clearReadNotifications();
           },
@@ -511,13 +769,13 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                   Icon(
                     Icons.delete_sweep_outlined,
                     size: 20,
-                    color: readCount > 0 ? Colors.redAccent : Colors.grey,
+                    color: readCount > 0 ? Colors.redAccent : _grey,
                   ),
                   const SizedBox(width: 10),
                   Text(
                     'Clear read ($readCount)',
                     style: TextStyle(
-                      color: readCount > 0 ? Colors.redAccent : Colors.grey,
+                      color: readCount > 0 ? Colors.redAccent : _grey,
                     ),
                   ),
                 ],
@@ -536,293 +794,328 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   Widget _buildTabBar() {
     return Container(
       color: Colors.white,
-      child: TabBar(
-        controller: _tabController,
-        isScrollable: true,
-        tabAlignment: TabAlignment.start,
-        labelColor: _orange,
-        unselectedLabelColor: _grey,
-        indicatorColor: _orange,
-        indicatorWeight: 2.5,
-        labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-        unselectedLabelStyle: const TextStyle(
-          fontWeight: FontWeight.w500,
-          fontSize: 13,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        height: 38,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(10),
         ),
-        tabs: _tabs.map((t) {
-          // Badge for Unread tab
-          if (t == NotificationCategory.unread && _unreadCount > 0) {
-            return Tab(
+        child: TabBar(
+          controller: _tabController,
+          indicator: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 4,
+                offset: Offset(0, 1),
+              ),
+            ],
+          ),
+          indicatorSize: TabBarIndicatorSize.tab,
+          labelColor: _dark,
+          unselectedLabelColor: _grey,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+          dividerHeight: 0,
+          tabs: [
+            const Tab(text: 'All'),
+            Tab(
               child: Row(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(t.label),
-                  const SizedBox(width: 5),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _orange,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '$_unreadCount',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                  const Text('Unread'),
+                  if (_unreadCount > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: _orange,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$_unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
-            );
-          }
-          return Tab(text: t.label);
-        }).toList(),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: _green));
+      return _buildSkeletonList();
     }
 
     if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.cloud_off_rounded, size: 48, color: Colors.grey),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: _grey),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadNotifications,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _green,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
+      return _buildErrorState();
     }
 
     final visible = _filtered;
-
     if (visible.isEmpty) {
-      return RefreshIndicator(
-        color: _green,
-        onRefresh: _refreshSilently,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            const SizedBox(height: 100),
-            const Icon(
-              Icons.notifications_off_outlined,
-              size: 56,
-              color: Colors.grey,
-            ),
-            const SizedBox(height: 16),
-            const Center(
-              child: Text(
-                'You\'re all caught up',
-                style: TextStyle(
-                  color: _dark,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Center(
-              child: Text(
-                _tabs[_tabController.index] == NotificationCategory.unread
-                    ? 'No unread notifications'
-                    : 'No notifications in this category',
-                style: const TextStyle(color: _grey, fontSize: 13),
-              ),
-            ),
-          ],
-        ),
-      );
+      return _buildEmptyState();
     }
+
+    final grouped = _groupNotifications(visible);
 
     return RefreshIndicator(
       color: _green,
-      onRefresh: _refreshSilently,
-      child: ListView.separated(
+      onRefresh: _loadNotifications,
+      child: ListView(
+        controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: visible.length,
-        separatorBuilder: (_, idx) => const Divider(height: 1, color: _divider),
-        itemBuilder: (context, index) => _buildNotificationTile(visible[index]),
+        children: [
+          ..._buildDateSection('Today', grouped['Today']!),
+          ..._buildDateSection('Yesterday', grouped['Yesterday']!),
+          ..._buildDateSection('Earlier', grouped['Earlier']!),
+          if (_isLoadingMore)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: _green),
+                ),
+              ),
+            ),
+          const SizedBox(height: 24),
+        ],
       ),
     );
   }
 
-  Widget _buildNotificationTile(AppNotification notif) {
-    final visuals = _visualsFor(notif.type);
-    return Dismissible(
-      key: ValueKey('notif_${notif.id}'),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        color: Colors.redAccent.withValues(alpha: 0.9),
+  List<Widget> _buildDateSection(String title, List<AppNotification> items) {
+    if (items.isEmpty) return const [];
+
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF4B5563),
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+      Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _divider),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          separatorBuilder: (context, index) => const Divider(height: 1, color: _divider),
+          itemBuilder: (context, index) {
+            final notif = items[index];
+            return NotificationCard(
+              notification: notif,
+              onTap: () => _onTapNotification(notif),
+              onDelete: () => _deleteNotification(notif),
+              onAcceptInvitation: notif.data?['invitationId'] != null
+                  ? () => _respondToCommunityInvitation(notif, 'accept')
+                  : null,
+              onDeclineInvitation: notif.data?['invitationId'] != null
+                  ? () => _respondToCommunityInvitation(notif, 'decline')
+                  : null,
+            );
+          },
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildEmptyState() {
+    final isUnreadTab = _tabs[_tabController.index] == _NotificationTab.unread;
+
+    return RefreshIndicator(
+      color: _green,
+      onRefresh: _loadNotifications,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 100),
+          Center(
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: _divider),
+              ),
+              child: const Icon(
+                Icons.notifications_off_outlined,
+                size: 38,
+                color: _grey,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Center(
+            child: Text(
+              "You're all caught up",
+              style: TextStyle(
+                color: _dark,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                isUnreadTab
+                    ? 'No unread notifications right now.'
+                    : 'New activity and updates will appear here.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: _grey, fontSize: 13, height: 1.4),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.delete_outline, color: Colors.white, size: 22),
-            SizedBox(height: 4),
-            Text(
-              'Delete',
-              style: TextStyle(
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
                 color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+                shape: BoxShape.circle,
+                border: Border.all(color: _divider),
+              ),
+              child: const Icon(
+                Icons.cloud_off_rounded,
+                size: 36,
+                color: Colors.redAccent,
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              "Couldn't load notifications",
+              style: TextStyle(
+                color: _dark,
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _error ?? 'Please check your connection and try again.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _grey, fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _loadNotifications,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _green,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
             ),
           ],
         ),
       ),
-      confirmDismiss: (_) async {
-        // Light confirmation via snack with undo — no full dialog for swipe
-        return true;
-      },
-      onDismissed: (_) => _deleteNotification(notif),
-      child: InkWell(
-        onTap: () => _onTapNotification(notif),
-        child: Container(
-          color: notif.isRead ? Colors.white : _orange.withValues(alpha: 0.05),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Icon Avatar
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: visuals.color.withValues(alpha: 0.15),
-                child: Icon(visuals.icon, color: visuals.color, size: 20),
+    );
+  }
+
+  Widget _buildSkeletonList() {
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      itemCount: 5,
+      itemBuilder: (context, index) => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _divider),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(22),
               ),
-              const SizedBox(width: 14),
-              // Content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (notif.title.isNotEmpty)
-                      Text(
-                        notif.title,
-                        style: TextStyle(
-                          color: _dark,
-                          fontSize: 14,
-                          fontWeight: notif.isRead
-                              ? FontWeight.w600
-                              : FontWeight.bold,
-                          height: 1.3,
-                        ),
-                      ),
-                    if (notif.message.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        notif.message,
-                        style: TextStyle(
-                          color: const Color(0xFF374151),
-                          fontSize: 13,
-                          fontWeight: notif.isRead
-                              ? FontWeight.normal
-                              : FontWeight.w500,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 5),
-                    Row(
-                      children: [
-                        Text(
-                          _formatTime(notif.createdAt),
-                          style: TextStyle(
-                            color: notif.isRead ? Colors.grey : _orange,
-                            fontSize: 11,
-                            fontWeight: notif.isRead
-                                ? FontWeight.normal
-                                : FontWeight.w500,
-                          ),
-                        ),
-                        // Deep-link indicator
-                        if (notif.deepLinkTarget != null) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _green.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'Tap to open',
-                              style: TextStyle(
-                                color: _green,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 140,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5E7EB),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    if (notif.data?['invitationId'] != null) ...[
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          OutlinedButton(
-                            onPressed: () => _respondToCommunityInvitation(
-                              notif,
-                              'decline',
-                            ),
-                            child: const Text('Decline'),
-                          ),
-                          const SizedBox(width: 8),
-                          FilledButton(
-                            onPressed: () => _respondToCommunityInvitation(
-                              notif,
-                              'accept',
-                            ),
-                            child: const Text('Accept'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              // Unread dot
-              if (!notif.isRead)
-                Container(
-                  margin: const EdgeInsets.only(top: 6, left: 8),
-                  width: 9,
-                  height: 9,
-                  decoration: const BoxDecoration(
-                    color: _orange,
-                    shape: BoxShape.circle,
                   ),
-                ),
-            ],
-          ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: 80,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

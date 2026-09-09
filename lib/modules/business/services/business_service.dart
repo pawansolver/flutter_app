@@ -10,126 +10,12 @@ class BusinessService {
 
   final Dio _dio = AuthenticatedDio().dio;
 
-  // In-memory cache for demo/offline resilience
+  // In-memory cache for state persistence during current session
   BusinessProfileModel? _cachedProfile;
-  final List<BusinessProductModel> _mockProducts = [
-    BusinessProductModel(
-      id: 'p1',
-      businessId: 1,
-      name: 'Organic Desi Cow Ghee (500ml)',
-      description: 'Pure Vedic bilona method cultured cow ghee directly sourced from local farm.',
-      price: 650.0,
-      originalPrice: 750.0,
-      inStock: true,
-      category: 'Dairy & Ghee',
-    ),
-    BusinessProductModel(
-      id: 'p2',
-      businessId: 1,
-      name: 'Whole Wheat Farm Atta (10kg)',
-      description: 'Stone ground 100% whole grain wheat flour with zero maida or preservatives.',
-      price: 420.0,
-      originalPrice: 480.0,
-      inStock: true,
-      category: 'Flour & Grains',
-    ),
-    BusinessProductModel(
-      id: 'p3',
-      businessId: 1,
-      name: 'Cold Pressed Mustard Oil (1L)',
-      description: 'Kachi Ghani pure yellow mustard cooking oil.',
-      price: 210.0,
-      originalPrice: 240.0,
-      inStock: true,
-      category: 'Oils & Spices',
-    ),
-    BusinessProductModel(
-      id: 'p4',
-      businessId: 1,
-      name: 'Fresh Paneer / Cottage Cheese (250g)',
-      description: 'Made fresh every morning from whole milk.',
-      price: 110.0,
-      inStock: false,
-      category: 'Dairy & Ghee',
-    ),
-  ];
-
-  final List<BusinessOfferModel> _mockOffers = [
-    BusinessOfferModel(
-      id: 1,
-      businessId: 1,
-      title: 'Neighbourhood Weekend Fest',
-      description: 'Get flat 15% discount on all monthly grocery hampers above ₹1,500.',
-      discountPercent: 15,
-      promoCode: 'GALI15',
-      validUntil: 'Valid till Sunday 9 PM',
-      isActive: true,
-    ),
-    BusinessOfferModel(
-      id: 2,
-      businessId: 1,
-      title: 'Free Society Doorstep Delivery',
-      description: 'Zero delivery fee for orders within 1km radius from our storefront.',
-      discountPercent: 10,
-      promoCode: 'FREESHIP',
-      validUntil: 'Ongoing season offer',
-      isActive: true,
-    ),
-  ];
-
-  final List<BusinessLeadModel> _mockLeads = [
-    BusinessLeadModel(
-      id: 'lead-1',
-      businessId: 1,
-      customerName: 'Anil Sharma (Flat B-504)',
-      customerPhone: '+91 98112 34567',
-      inquiryType: 'Monthly Ration Order',
-      message: 'Can you deliver the 10kg Atta and 2L mustard oil today by 6 PM to Palm Heights?',
-      status: 'NEW',
-      createdAt: DateTime.now().subtract(const Duration(minutes: 25)),
-    ),
-    BusinessLeadModel(
-      id: 'lead-2',
-      businessId: 1,
-      customerName: 'Priya Mehra (Tower A)',
-      customerPhone: '+91 97123 45678',
-      inquiryType: 'Stock Inquiry',
-      message: 'When will fresh Desi Cow Ghee batch arrive? Need 2 jars.',
-      status: 'CONTACTED',
-      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-    ),
-    BusinessLeadModel(
-      id: 'lead-3',
-      businessId: 1,
-      customerName: 'Vikram Joshi',
-      customerPhone: '+91 99234 56789',
-      inquiryType: 'Bulk Society Purchase',
-      message: 'Needed pricing quotation for Diwali society gift hampers.',
-      status: 'CONVERTED',
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
-    ),
-  ];
-
-  final List<BusinessReviewModel> _mockReviews = [
-    BusinessReviewModel(
-      id: 1,
-      businessId: 1,
-      userName: 'Dr. Rajesh Gupta',
-      rating: 5.0,
-      comment: 'Excellent quality grocery. The desi cow ghee is top notch and delivery to society is within 30 minutes!',
-      replyText: 'Thank you Dr. Gupta for your continuous trust! Always happy to serve our neighbourhood.',
-      repliedAt: DateTime.now().subtract(const Duration(days: 2)),
-      createdAt: DateTime.now().subtract(const Duration(days: 3)),
-    ),
-    BusinessReviewModel(
-      id: 2,
-      businessId: 1,
-      userName: 'Sneha Verma',
-      rating: 4.5,
-      comment: 'Very polite shopkeeper and fresh dairy products. Would recommend to all neighbours in Sector 4.',
-      createdAt: DateTime.now().subtract(const Duration(days: 5)),
-    ),
-  ];
+  final List<BusinessProductModel> _sessionProducts = [];
+  final List<BusinessOfferModel> _sessionOffers = [];
+  final List<BusinessLeadModel> _sessionLeads = [];
+  final List<BusinessReviewModel> _sessionReviews = [];
 
   // ── Profile Methods ──────────────────────────────────────────────────────────
   Future<BusinessProfileModel> getMyBusinessProfile() async {
@@ -146,21 +32,20 @@ class BusinessService {
 
     if (_cachedProfile != null) return _cachedProfile!;
 
-    // Curated initial profile
+    // Honest initial profile with no fake ratings or invented hours
     _cachedProfile = BusinessProfileModel(
       id: 1,
-      businessName: 'Verma Supermart & Daily Fresh',
-      categoryName: 'Grocery & Daily Essentials',
-      description:
-          'Your trusted neighbourhood supermarket serving fresh farm dairy, whole grain flours, organic spices, and daily household supplies with free 30-min doorstep delivery to society towers.',
-      address: 'Shop #4, Commercial Complex, Main Gali Road, Near Gate 2',
-      phone: '+91 98765 12340',
-      email: 'verma.supermart@smartgali.local',
-      website: 'https://smartgali.in/shops/verma-supermart',
-      operatingHours: '7:30 AM - 10:30 PM (All 7 Days)',
-      isVerified: true,
-      rating: 4.8,
-      reviewCount: 48,
+      businessName: 'My Local Business',
+      categoryName: 'General Store',
+      description: 'Add your business description here to reach neighbours.',
+      address: null,
+      phone: null,
+      email: null,
+      website: null,
+      operatingHours: null,
+      isVerified: false,
+      rating: null,
+      reviewCount: null,
       isOpen: true,
     );
     return _cachedProfile!;
@@ -185,31 +70,136 @@ class BusinessService {
     }
   }
 
+  // ── Public Directory & Discovery Methods ──────────────────────────────────────
+  Future<List<BusinessProfileModel>> getBusinesses({
+    int? categoryId,
+    String? search,
+    bool? isVerified,
+  }) async {
+    try {
+      final queryParams = <String, dynamic>{};
+      if (categoryId != null && categoryId > 0) queryParams['category_id'] = categoryId;
+      if (isVerified == true) queryParams['is_verified'] = 'true';
+
+      final response = await _dio.get(
+        '${ApiConfig.baseUrl}/business-profile',
+        queryParameters: queryParams,
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        final List rawList = response.data is List
+            ? response.data
+            : (response.data['data'] is List ? response.data['data'] : []);
+
+        List<BusinessProfileModel> results = rawList
+            .map((item) => BusinessProfileModel.fromJson(item as Map<String, dynamic>))
+            .toList();
+
+        if (search != null && search.trim().isNotEmpty) {
+          final query = search.trim().toLowerCase();
+          results = results.where((b) {
+            final nameMatch = b.businessName.toLowerCase().contains(query);
+            final catMatch = b.categoryName.toLowerCase().contains(query);
+            final descMatch = b.description?.toLowerCase().contains(query) ?? false;
+            return nameMatch || catMatch || descMatch;
+          }).toList();
+        }
+
+        return results;
+      }
+    } catch (_) {
+      // Handle network or endpoint issue safely
+    }
+
+    // If backend profile list is empty or offline, check cached profile
+    if (_cachedProfile != null) {
+      if (search != null && search.trim().isNotEmpty) {
+        if (_cachedProfile!.businessName.toLowerCase().contains(search.toLowerCase())) {
+          return [_cachedProfile!];
+        }
+        return [];
+      }
+      return [_cachedProfile!];
+    }
+
+    return [];
+  }
+
+  Future<BusinessProfileModel?> getBusinessById(int id) async {
+    try {
+      final response = await _dio.get('${ApiConfig.baseUrl}/business-profile/$id');
+      if (response.statusCode == 200 && response.data != null) {
+        final profileData = response.data['data'] ?? response.data;
+        return BusinessProfileModel.fromJson(profileData);
+      }
+    } catch (_) {}
+
+    if (_cachedProfile != null && _cachedProfile!.id == id) {
+      return _cachedProfile;
+    }
+    return null;
+  }
+
+  Future<List<BusinessCategoryModel>> getCategories() async {
+    try {
+      final response = await _dio.get('${ApiConfig.baseUrl}/business-category');
+      if (response.statusCode == 200 && response.data != null) {
+        final List list = response.data is List
+            ? response.data
+            : (response.data['data'] is List ? response.data['data'] : []);
+        if (list.isNotEmpty) {
+          return list.map((e) => BusinessCategoryModel.fromJson(e)).toList();
+        }
+      }
+    } catch (_) {}
+
+    // Standard taxonomy categories for SmartGali
+    return [
+      BusinessCategoryModel(id: 1, name: 'Grocery & Kirana', icon: 'storefront'),
+      BusinessCategoryModel(id: 2, name: 'Dairy & Milk', icon: 'water_drop'),
+      BusinessCategoryModel(id: 3, name: 'Bakery & Sweets', icon: 'bakery_dining'),
+      BusinessCategoryModel(id: 4, name: 'Pharmacy & Medical', icon: 'local_pharmacy'),
+      BusinessCategoryModel(id: 5, name: 'Fruits & Vegetables', icon: 'eco'),
+      BusinessCategoryModel(id: 6, name: 'Electronics & Electrical', icon: 'electrical_services'),
+      BusinessCategoryModel(id: 7, name: 'Hardware & Sanitary', icon: 'handyman'),
+      BusinessCategoryModel(id: 8, name: 'Stationery & Books', icon: 'menu_book'),
+    ];
+  }
+
   // ── Products ───────────────────────────────────────────────────────────────
   Future<List<BusinessProductModel>> getProducts(int businessId) async {
-    return List.from(_mockProducts);
+    try {
+      final res = await _dio.get('${ApiConfig.baseUrl}/business-product/business/$businessId');
+      if (res.statusCode == 200 && res.data != null) {
+        final List list = res.data['data'] ?? res.data;
+        if (list.isNotEmpty) {
+          return list.map((e) => BusinessProductModel.fromJson(e)).toList();
+        }
+      }
+    } catch (_) {}
+    return _sessionProducts.where((p) => p.businessId == businessId).toList();
   }
 
   Future<void> addProduct(BusinessProductModel product) async {
-    _mockProducts.insert(0, product);
+    _sessionProducts.insert(0, product);
   }
 
   Future<void> updateProduct(BusinessProductModel product) async {
-    final idx = _mockProducts.indexWhere((p) => p.id == product.id);
+    final idx = _sessionProducts.indexWhere((p) => p.id == product.id);
     if (idx != -1) {
-      _mockProducts[idx] = product;
+      _sessionProducts[idx] = product;
     }
   }
 
   Future<void> deleteProduct(String productId) async {
-    _mockProducts.removeWhere((p) => p.id == productId);
+    _sessionProducts.removeWhere((p) => p.id == productId);
   }
 
   Future<void> toggleProductStock(String productId) async {
-    final idx = _mockProducts.indexWhere((p) => p.id == productId);
+    final idx = _sessionProducts.indexWhere((p) => p.id == productId);
     if (idx != -1) {
-      final p = _mockProducts[idx];
-      _mockProducts[idx] = BusinessProductModel(
+      final p = _sessionProducts[idx];
+      _sessionProducts[idx] = BusinessProductModel(
         id: p.id,
         businessId: p.businessId,
         name: p.name,
@@ -234,11 +224,11 @@ class BusinessService {
         }
       }
     } catch (_) {}
-    return List.from(_mockOffers);
+    return _sessionOffers.where((o) => o.businessId == businessId).toList();
   }
 
   Future<void> createOffer(BusinessOfferModel offer) async {
-    _mockOffers.insert(0, offer);
+    _sessionOffers.insert(0, offer);
     try {
       await _dio.post(
         '${ApiConfig.baseUrl}/business-offer',
@@ -248,7 +238,7 @@ class BusinessService {
   }
 
   Future<void> deleteOffer(int offerId) async {
-    _mockOffers.removeWhere((o) => o.id == offerId);
+    _sessionOffers.removeWhere((o) => o.id == offerId);
     try {
       await _dio.delete('${ApiConfig.baseUrl}/business-offer/$offerId');
     } catch (_) {}
@@ -256,14 +246,24 @@ class BusinessService {
 
   // ── Leads ──────────────────────────────────────────────────────────────────
   Future<List<BusinessLeadModel>> getLeads(int businessId) async {
-    return List.from(_mockLeads);
+    return _sessionLeads.where((l) => l.businessId == businessId).toList();
+  }
+
+  Future<void> submitLead(BusinessLeadModel lead) async {
+    _sessionLeads.insert(0, lead);
+    try {
+      await _dio.post(
+        '${ApiConfig.baseUrl}/business-lead',
+        data: lead.toJson(),
+      );
+    } catch (_) {}
   }
 
   Future<void> updateLeadStatus(String leadId, String newStatus) async {
-    final idx = _mockLeads.indexWhere((l) => l.id == leadId);
+    final idx = _sessionLeads.indexWhere((l) => l.id == leadId);
     if (idx != -1) {
-      final l = _mockLeads[idx];
-      _mockLeads[idx] = BusinessLeadModel(
+      final l = _sessionLeads[idx];
+      _sessionLeads[idx] = BusinessLeadModel(
         id: l.id,
         businessId: l.businessId,
         customerName: l.customerName,
@@ -287,14 +287,42 @@ class BusinessService {
         }
       }
     } catch (_) {}
-    return List.from(_mockReviews);
+    return _sessionReviews.where((r) => r.businessId == businessId).toList();
+  }
+
+  Future<void> createReview({
+    required int businessId,
+    required double rating,
+    required String comment,
+    String? userName,
+  }) async {
+    final review = BusinessReviewModel(
+      id: DateTime.now().millisecondsSinceEpoch,
+      businessId: businessId,
+      userName: userName ?? 'Neighbourhood Resident',
+      rating: rating,
+      comment: comment,
+      createdAt: DateTime.now(),
+    );
+    _sessionReviews.insert(0, review);
+
+    try {
+      await _dio.post(
+        '${ApiConfig.baseUrl}/business-review',
+        data: {
+          'business_id': businessId,
+          'rating': rating,
+          'comment': comment,
+        },
+      );
+    } catch (_) {}
   }
 
   Future<void> replyToReview(int reviewId, String replyText) async {
-    final idx = _mockReviews.indexWhere((r) => r.id == reviewId);
+    final idx = _sessionReviews.indexWhere((r) => r.id == reviewId);
     if (idx != -1) {
-      final r = _mockReviews[idx];
-      _mockReviews[idx] = BusinessReviewModel(
+      final r = _sessionReviews[idx];
+      _sessionReviews[idx] = BusinessReviewModel(
         id: r.id,
         businessId: r.businessId,
         userName: r.userName,

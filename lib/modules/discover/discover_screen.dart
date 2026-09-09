@@ -3,6 +3,7 @@ import '../dashboard/main_dashboard.dart';
 import '../../widgets/custom_drawer.dart';
 import '../community/community_groups_screen.dart';
 import '../services/screens/services_marketplace_screen.dart';
+import '../business/screens/business_listings_screen.dart';
 import '../profile/follow_service.dart';
 import '../profile/user_profile_screen.dart';
 
@@ -331,6 +332,73 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               ),
             ),
             
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const BusinessListingsScreen(),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x06000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7ED),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(Icons.storefront_rounded, color: Color(0xFFFF6B00), size: 26),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Nearby Local Shops',
+                              style: TextStyle(
+                                color: Color(0xFF111827),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Explore grocery, bakery, medical & daily needs',
+                              style: TextStyle(
+                                color: Color(0xFF6B7280),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF9CA3AF), size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 20, 16, 12),
               child: Text(
@@ -440,16 +508,28 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               separatorBuilder: (context, index) => const SizedBox(height: 16),
               itemBuilder: (context, index) {
                 final item = _trendingItems[index];
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                return InkWell(
+                  onTap: () {
+                    if (item['type'] == 'Business') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const BusinessListingsScreen(),
+                        ),
+                      );
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -498,8 +578,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                       ),
                     ],
                   ),
-                );
-              },
+                ),
+              );
+            },
             ),
             const SizedBox(height: 32),
           ],

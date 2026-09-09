@@ -11,6 +11,7 @@ import '../services/screens/provider_booking_detail_screen.dart';
 import '../services/screens/provider_bookings_screen.dart';
 import '../services/screens/provider_earnings_screen.dart';
 import '../services/screens/provider_reviews_screen.dart';
+import '../core/notifications_screen.dart';
 
 class ProviderDashboardScreen extends StatefulWidget {
   const ProviderDashboardScreen({super.key});
@@ -219,7 +220,12 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
             IconButton(
               icon: const Icon(Icons.notifications_none_outlined, color: Color(0xFF111827)),
               tooltip: 'Notifications',
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                );
+              },
             ),
           ],
           bottom: PreferredSize(

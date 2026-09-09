@@ -7,6 +7,7 @@ import '../modules/provider/provider_dashboard_screen.dart';
 import '../modules/community/community_groups_screen.dart';
 import '../modules/services/screens/services_marketplace_screen.dart';
 import '../modules/services/screens/my_service_bookings_screen.dart';
+import '../modules/business/screens/business_listings_screen.dart';
 import '../modules/business/screens/business_dashboard_screen.dart';
 import '../modules/settings/settings_screen.dart';
 import '../shared/widgets/role_switch_sheet.dart';
@@ -281,7 +282,7 @@ class CustomDrawer extends StatelessWidget {
                     },
                   ),
                   _buildMenuItem(
-                    icon: Icons.storefront_outlined,
+                    icon: Icons.handyman_outlined,
                     title: 'Local Services',
                     isSelected:
                         context
@@ -301,6 +302,32 @@ class CustomDrawer extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (_) => const ServicesMarketplaceScreen(),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  _buildMenuItem(
+                    icon: Icons.storefront_outlined,
+                    title: 'Local Shops & Stores',
+                    isSelected:
+                        context
+                            .findAncestorWidgetOfExactType<
+                              BusinessListingsScreen
+                            >() !=
+                        null,
+                    onTap: () {
+                      final isCurrent =
+                          context.findAncestorWidgetOfExactType<
+                            BusinessListingsScreen
+                          >() !=
+                          null;
+                      Navigator.pop(context);
+                      if (!isCurrent) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BusinessListingsScreen(),
                           ),
                         );
                       }

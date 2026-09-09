@@ -47,8 +47,8 @@ class BusinessProfileModel {
   final String? bannerUrl;
   final String? logoUrl;
   final bool isVerified;
-  final double rating;
-  final int reviewCount;
+  final double? rating;
+  final int? reviewCount;
   final bool isOpen;
 
   BusinessProfileModel({
@@ -66,30 +66,55 @@ class BusinessProfileModel {
     this.bannerUrl,
     this.logoUrl,
     this.isVerified = false,
-    this.rating = 4.8,
-    this.reviewCount = 0,
+    this.rating,
+    this.reviewCount,
     this.isOpen = true,
   });
 
+  bool get hasRating => rating != null && rating! > 0;
+  String get formattedRating => rating != null ? rating!.toStringAsFixed(1) : '--';
+  String get formattedReviewCount => (reviewCount != null && reviewCount! > 0) ? '($reviewCount reviews)' : '(No reviews)';
+  String get displayOperatingHours => (operatingHours != null && operatingHours!.trim().isNotEmpty) ? operatingHours! : 'Hours not specified';
+
   factory BusinessProfileModel.fromJson(Map<String, dynamic> json) {
+    final rawRating = json['rating'] ?? json['avgRating'] ?? json['average_rating'];
+    final rawReviewCount = json['reviewCount'] ?? json['totalReviews'] ?? json['reviews_count'];
+    final rawHours = json['operatingHours'] ?? json['operating_hours'] ?? json['timings'];
+
     return BusinessProfileModel(
       id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '1') ?? 1,
-      userId: json['userId'] is int ? json['userId'] : int.tryParse(json['userId']?.toString() ?? ''),
-      businessName: json['businessName']?.toString() ?? json['name']?.toString() ?? 'My Business',
-      categoryId: json['categoryId'] is int ? json['categoryId'] : int.tryParse(json['categoryId']?.toString() ?? ''),
-      categoryName: json['categoryName']?.toString() ?? json['category']?.toString() ?? 'Local Business',
+      userId: json['userId'] is int
+          ? json['userId']
+          : int.tryParse(json['userId']?.toString() ?? json['user_id']?.toString() ?? ''),
+      businessName: json['businessName']?.toString() ??
+          json['business_name']?.toString() ??
+          json['name']?.toString() ??
+          'Local Business',
+      categoryId: json['categoryId'] is int
+          ? json['categoryId']
+          : int.tryParse(json['categoryId']?.toString() ?? json['category_id']?.toString() ?? ''),
+      categoryName: json['category'] is Map
+          ? (json['category']['name']?.toString() ?? 'Local Business')
+          : (json['categoryName']?.toString() ?? json['category']?.toString() ?? 'Local Business'),
       description: json['description']?.toString(),
       address: json['address']?.toString() ?? json['location']?.toString(),
-      phone: json['phone']?.toString() ?? json['contactNumber']?.toString(),
+      phone: json['phone']?.toString() ??
+          json['contactNumber']?.toString() ??
+          json['contact_number']?.toString(),
       email: json['email']?.toString(),
       website: json['website']?.toString(),
-      operatingHours: json['operatingHours']?.toString() ?? '9:00 AM - 9:00 PM',
-      bannerUrl: json['bannerUrl']?.toString() ?? json['coverImage']?.toString(),
-      logoUrl: json['logoUrl']?.toString() ?? json['profileImage']?.toString(),
-      isVerified: json['isVerified'] == true,
-      rating: double.tryParse(json['rating']?.toString() ?? '4.8') ?? 4.8,
-      reviewCount: int.tryParse(json['reviewCount']?.toString() ?? '12') ?? 12,
-      isOpen: json['isOpen'] != false,
+      operatingHours: rawHours?.toString(),
+      bannerUrl: json['bannerUrl']?.toString() ??
+          json['banner_url']?.toString() ??
+          json['coverImage']?.toString(),
+      logoUrl: json['logoUrl']?.toString() ??
+          json['logo_url']?.toString() ??
+          json['logo']?.toString() ??
+          json['profileImage']?.toString(),
+      isVerified: json['isVerified'] == true || json['is_verified'] == true,
+      rating: rawRating != null ? double.tryParse(rawRating.toString()) : null,
+      reviewCount: rawReviewCount != null ? int.tryParse(rawReviewCount.toString()) : null,
+      isOpen: json['isOpen'] == null ? true : (json['isOpen'] == true || json['is_open'] == true),
     );
   }
 

@@ -100,11 +100,36 @@ class AppNotification {
   /// Returns the deep-link target type from the notification data payload.
   String? get deepLinkTarget {
     final target = data?['target']?.toString();
-    if (target == null || target.isEmpty) return null;
-    if (target.startsWith('/communities/')) return 'community';
-    if (target.startsWith('/chat/')) return 'chat';
-    if (target.startsWith('/post/')) return 'post';
-    return target;
+    if (target != null && target.isNotEmpty) {
+      if (target.startsWith('/communities/')) return 'community';
+      if (target.startsWith('/chat/')) return 'chat';
+      if (target.startsWith('/post/')) return 'post';
+      if (target.startsWith('/event/')) return 'event';
+      if (target.startsWith('/booking/')) return 'booking';
+      if (target.startsWith('/profile/') || target.startsWith('/user/')) return 'profile';
+      if (target.startsWith('/society/')) return 'society';
+      return target;
+    }
+    // Fallbacks from payload IDs:
+    if (data?['chatId'] != null) return 'chat';
+    if (data?['communityId'] != null) return 'community';
+    if (data?['eventId'] != null) return 'event';
+    if (data?['bookingId'] != null) return 'booking';
+    if (data?['postId'] != null) return 'post';
+    if (data?['userId'] != null || data?['targetUserId'] != null) return 'profile';
+    if (data?['societyId'] != null) return 'society';
+
+    // Fallbacks from notification type:
+    final t = type.toLowerCase();
+    if (t.contains('chat') || t.contains('message')) return 'chat';
+    if (t.contains('event')) return 'event';
+    if (t.contains('community') || t.contains('announcement')) return 'community';
+    if (t.contains('booking') || t.contains('service')) return 'booking';
+    if (t.contains('review')) return 'review';
+    if (t.contains('follow')) return 'profile';
+    if (t.contains('post') || t.contains('like') || t.contains('comment')) return 'post';
+    if (t.contains('society') || t.contains('complaint') || t.contains('visitor')) return 'society';
+    return null;
   }
 }
 
