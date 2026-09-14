@@ -110,25 +110,103 @@ class AppNotification {
       if (target.startsWith('/society/')) return 'society';
       return target;
     }
-    // Fallbacks from payload IDs:
-    if (data?['chatId'] != null) return 'chat';
-    if (data?['communityId'] != null) return 'community';
-    if (data?['eventId'] != null) return 'event';
-    if (data?['bookingId'] != null) return 'booking';
-    if (data?['postId'] != null) return 'post';
-    if (data?['userId'] != null || data?['targetUserId'] != null) return 'profile';
-    if (data?['societyId'] != null) return 'society';
 
-    // Fallbacks from notification type:
     final t = type.toLowerCase();
-    if (t.contains('chat') || t.contains('message')) return 'chat';
-    if (t.contains('event')) return 'event';
-    if (t.contains('community') || t.contains('announcement')) return 'community';
-    if (t.contains('booking') || t.contains('service')) return 'booking';
-    if (t.contains('review')) return 'review';
-    if (t.contains('follow')) return 'profile';
-    if (t.contains('post') || t.contains('like') || t.contains('comment')) return 'post';
-    if (t.contains('society') || t.contains('complaint') || t.contains('visitor')) return 'society';
+    final titleLower = title.toLowerCase();
+    final msgLower = message.toLowerCase();
+
+    // 1. Society Operations
+    if (data?['complaintId'] != null ||
+        titleLower.contains('complaint') ||
+        msgLower.contains('complaint') ||
+        t.contains('complaint')) {
+      return 'society_complaint';
+    }
+    if (data?['visitorId'] != null ||
+        titleLower.contains('visitor') ||
+        msgLower.contains('visitor') ||
+        t.contains('visitor')) {
+      return 'society_visitor';
+    }
+    if (data?['announcementId'] != null ||
+        titleLower.contains('announcement') ||
+        titleLower.contains('circular') ||
+        msgLower.contains('announcement') ||
+        t.contains('announcement')) {
+      return 'society_announcement';
+    }
+    if (data?['pollId'] != null ||
+        titleLower.contains('poll') ||
+        msgLower.contains('poll') ||
+        t.contains('poll')) {
+      return 'society_poll';
+    }
+    if (data?['parkingId'] != null ||
+        titleLower.contains('parking') ||
+        msgLower.contains('parking') ||
+        t.contains('parking')) {
+      return 'society_parking';
+    }
+    if (titleLower.contains('emergency') ||
+        msgLower.contains('emergency') ||
+        t == 'emergency' ||
+        (t == 'alert' && (titleLower.contains('alert') || msgLower.contains('alert')))) {
+      return 'society_emergency';
+    }
+
+    // 2. Chat / Messaging
+    if (data?['chatId'] != null ||
+        data?['kind'] == 'chat_message' ||
+        t.contains('chat') ||
+        t.contains('message')) {
+      return 'chat';
+    }
+
+    // 3. Bookings & Services
+    if (data?['bookingId'] != null ||
+        t.contains('booking') ||
+        t.contains('service')) {
+      return 'booking';
+    }
+    if (data?['reviewId'] != null || t.contains('review')) {
+      return 'review';
+    }
+
+    // 4. Events
+    if (data?['invitationId'] != null && (data?['eventId'] != null || t.contains('event'))) {
+      return 'event_invitation';
+    }
+    if (data?['eventId'] != null || t.contains('event')) {
+      return 'event';
+    }
+
+    // 5. Community
+    if (data?['communityId'] != null || t.contains('community')) {
+      return 'community';
+    }
+
+    // 6. Posts
+    if (data?['postId'] != null ||
+        data?['kind'] == 'post' ||
+        t.contains('post') ||
+        t.contains('like') ||
+        t.contains('comment')) {
+      return 'post';
+    }
+
+    // 7. Profile / Follow
+    if (data?['userId'] != null ||
+        data?['targetUserId'] != null ||
+        data?['senderId'] != null ||
+        t.contains('follow')) {
+      return 'profile';
+    }
+
+    // 8. General Society
+    if (data?['societyId'] != null || t.contains('society')) {
+      return 'society';
+    }
+
     return null;
   }
 }
@@ -277,6 +355,27 @@ class NotificationService {
     }
   }
 
+  Future<NotificationResult<bool>> markUnread(int id) async {
+    try {
+      final resp = await _dio.patch(
+        ApiConfig.markNotificationUnread(id),
+        options: await _authOptions(),
+      );
+      if (resp.statusCode == 200 && resp.data['success'] == true) {
+        return const NotificationResult.success(true);
+      }
+      return NotificationResult.failure(
+        resp.data['message']?.toString() ?? 'Failed to mark as unread',
+      );
+    } on DioException catch (e) {
+      return NotificationResult.failure(
+        _extractError(e, 'Failed to mark as unread'),
+      );
+    } catch (_) {
+      return const NotificationResult.failure('Something went wrong');
+    }
+  }
+
   Future<NotificationResult<int>> markAllRead() async {
     try {
       final resp = await _dio.patch(
@@ -302,11 +401,17 @@ class NotificationService {
 
   // ── DELETE ───────────────────────────────────────────────────────────────
 
-  /// Soft-delete a single notification (swipe-to-dismiss / long-press delete).
-  Future<NotificationResult<bool>> deleteNotification(int id) async {
+  /// Soft-delete a single notification (swipe-to-dismiss / menu delete).
+  Future<NotificationResult<bool>> deleteNotification(
+    int id, {
+    String? deletedRemarks,
+  }) async {
     try {
       final resp = await _dio.delete(
         ApiConfig.deleteNotification(id),
+        data: {
+          'deletedRemarks': deletedRemarks ?? 'User deleted notification',
+        },
         options: await _authOptions(),
       );
       if (resp.statusCode == 200 && resp.data['success'] == true) {

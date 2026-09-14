@@ -106,7 +106,7 @@ class EventCard extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFFDC2626),
+                            color: Color(0xFFF18D38),
                             letterSpacing: 0.5,
                           ),
                         ),
@@ -136,7 +136,7 @@ class EventCard extends StatelessWidget {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFEFF6FF),
+                                  color: const Color(0xFFFFF4EC),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
@@ -144,7 +144,7 @@ class EventCard extends StatelessWidget {
                                   style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF2563EB),
+                                    color: Color(0xFFF18D38),
                                   ),
                                 ),
                               ),
@@ -213,8 +213,6 @@ class EventCard extends StatelessWidget {
                                   fontSize: 13,
                                   color: Color(0xFF4B5563),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
@@ -282,7 +280,7 @@ class EventCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF2563EB),
+                        color: Color(0xFFF18D38),
                       ),
                     ),
                 ],

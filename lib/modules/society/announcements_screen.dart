@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../dashboard/main_dashboard.dart';
 import '../../services/society_service.dart';
 import '../../models/society_models.dart';
+import '../../services/auth_session.dart';
 
 // ─── Colors ────────────────────────────────────────────────────────
 class _C {
@@ -14,7 +15,8 @@ class _C {
 
 class AnnouncementsScreen extends StatefulWidget {
   final int? societyId;
-  const AnnouncementsScreen({super.key, this.societyId});
+  final String? userRole;
+  const AnnouncementsScreen({super.key, this.societyId, this.userRole});
 
   @override
   State<AnnouncementsScreen> createState() => _AnnouncementsScreenState();
@@ -24,13 +26,21 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   final SocietyService _societyService = SocietyService();
 
   int? _resolvedSocietyId;
+  String? _userRole;
   bool _isLoading = true;
   String? _errorMessage;
   List<SocietyAnnouncementModel> _announcements = [];
 
+  bool get _canCreateAnnouncement {
+    if (_userRole == null) return true; // Default allow, backend enforces RBAC
+    final r = _userRole!.toLowerCase().trim();
+    return r == 'admin' || r == 'committee' || r == 'owner' || r == 'superadmin';
+  }
+
   @override
   void initState() {
     super.initState();
+    _userRole = widget.userRole;
     _initAndLoad();
   }
 
@@ -38,6 +48,32 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     _resolvedSocietyId = await _societyService.resolveActiveSocietyId(widget.societyId);
 
     if (_resolvedSocietyId != null) {
+      if (_userRole == null) {
+        try {
+          final mySoc = await _societyService.getMySociety();
+          if (mySoc != null && mySoc.id == _resolvedSocietyId && mySoc.userRole != null) {
+            _userRole = mySoc.userRole;
+          } else {
+            final currentUserId = await AuthSessionStore().readUserId();
+            if (currentUserId != null) {
+              final membersRes = await _societyService.getMembers(_resolvedSocietyId!, limit: 100);
+              final myMember = membersRes.data.firstWhere(
+                (m) => m.userId == currentUserId,
+                orElse: () => const SocietyMemberModel(
+                  id: 0,
+                  societyId: 0,
+                  userId: 0,
+                  role: 'member',
+                  status: 'active',
+                ),
+              );
+              if (myMember.id > 0) {
+                _userRole = myMember.role.toLowerCase();
+              }
+            }
+          }
+        } catch (_) {}
+      }
       await _loadAnnouncements();
     } else {
       if (mounted) setState(() => _isLoading = false);
@@ -216,26 +252,35 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   }
 
   void _showCreateAnnouncementModal() {
-    if (_resolvedSocietyId == null) return;
+    if (_resolvedSocietyId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to identify active society.')),
+      );
+      return;
+    }
+
     final titleController = TextEditingController();
     final messageController = TextEditingController();
     final categoryController = TextEditingController(text: 'General');
     String priority = 'medium';
     bool isPinned = false;
     bool isSubmitting = false;
+    String? modalError;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => Container(
+        builder: (modalCtx, setModalState) => Container(
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: EdgeInsets.only(
-            left: 24, right: 24, top: 24,
+            left: 24,
+            right: 24,
+            top: 24,
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
           child: Column(
@@ -245,16 +290,49 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Publish Notice',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF111827))),
-                  IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: () => Navigator.pop(ctx)),
+                  const Text(
+                    'Publish Notice',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.grey),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
                 ],
               ),
+              if (modalError != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFECACA)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          modalError!,
+                          style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               TextField(
                 controller: titleController,
                 decoration: InputDecoration(
                   labelText: 'Notice Title',
+                  hintText: 'e.g. Water Tank Maintenance',
                   filled: true,
                   fillColor: const Color(0xFFF9FAFB),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -266,6 +344,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 maxLines: 3,
                 decoration: InputDecoration(
                   labelText: 'Notice Message',
+                  hintText: 'Enter notice details for all residents...',
                   filled: true,
                   fillColor: const Color(0xFFF9FAFB),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -322,9 +401,23 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                       : () async {
                           final title = titleController.text.trim();
                           final msg = messageController.text.trim();
-                          if (title.isEmpty || msg.isEmpty) return;
+                          if (title.isEmpty) {
+                            setModalState(() => modalError = 'Please enter a notice title.');
+                            return;
+                          }
+                          if (title.length < 3) {
+                            setModalState(() => modalError = 'Notice title must be at least 3 characters.');
+                            return;
+                          }
+                          if (msg.isEmpty) {
+                            setModalState(() => modalError = 'Please enter a notice message.');
+                            return;
+                          }
 
-                          setModalState(() => isSubmitting = true);
+                          setModalState(() {
+                            isSubmitting = true;
+                            modalError = null;
+                          });
                           try {
                             await _societyService.createAnnouncement(
                               _resolvedSocietyId!,
@@ -335,15 +428,44 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                               isPinned: isPinned,
                             );
                             if (ctx.mounted) Navigator.pop(ctx);
-                            _loadAnnouncements();
-                          } catch (_) {
-                            setModalState(() => isSubmitting = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Announcement published successfully!'),
+                                  backgroundColor: Color(0xFF10B981),
+                                ),
+                              );
+                              _loadAnnouncements();
+                            }
+                          } catch (e) {
+                            String errStr = e.toString();
+                            if (errStr.startsWith('SocietyServiceException: ')) {
+                              errStr = errStr.substring(24);
+                            } else if (errStr.startsWith('Exception: ')) {
+                              errStr = errStr.substring(11);
+                            }
+                            if (ctx.mounted) {
+                              setModalState(() {
+                                isSubmitting = false;
+                                modalError = errStr;
+                              });
+                            }
                           }
                         },
                   child: isSubmitting
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Publish Announcement',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Text(
+                          'Publish Announcement',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -375,12 +497,14 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       },
       child: Scaffold(
         backgroundColor: _C.bg,
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: _C.orange,
-          elevation: 0,
-          onPressed: _showCreateAnnouncementModal,
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
+        floatingActionButton: _canCreateAnnouncement
+            ? FloatingActionButton(
+                backgroundColor: _C.orange,
+                elevation: 0,
+                onPressed: _showCreateAnnouncementModal,
+                child: const Icon(Icons.add, color: Colors.white),
+              )
+            : null,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,

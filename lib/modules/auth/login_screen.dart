@@ -92,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Image.asset(
                   'assets/images/logosmartgali.png',
-                  height: 130,
+                  height: 150,
                   fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 32),

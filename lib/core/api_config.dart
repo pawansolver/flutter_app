@@ -49,12 +49,15 @@ class ApiConfig {
 
   /// Base URL resolution (priority order):
   ///  1. --dart-define=API_BASE_URL  → explicit override (always wins)
-  ///  2. useLocalhost = true         → Local dev URLs (10.0.2.2 / 127.0.0.1 / localhost)
-  ///  3. Default                     → Live Production URL (https://api.smartgali.com/api/v1)
+  ///  2. kReleaseMode                → Live Production URL (always in release AAB/APK)
+  ///  3. useLocalhost = true         → Local dev URLs (10.0.2.2 / 127.0.0.1 / localhost)
+  ///  4. Default                     → Live Production URL (https://api.smartgali.com/api/v1)
   static String get baseUrl {
     String selected;
     if (_hasCustomUrl) {
       selected = _configuredUrl.trim();
+    } else if (kReleaseMode) {
+      selected = _productionUrl;
     } else if (useLocalhost) {
       selected = _localDevUrl;
     } else {
@@ -166,6 +169,8 @@ class ApiConfig {
       "$baseUrl/notification/me/read-all";
   static String markNotificationRead(int id) =>
       "$baseUrl/notification/$id/read";
+  static String markNotificationUnread(int id) =>
+      "$baseUrl/notification/$id/unread";
   static String deleteNotification(int id) => "$baseUrl/notification/$id";
   static String get bulkDeleteNotifications =>
       "$baseUrl/notification/bulk-delete";
@@ -272,6 +277,7 @@ class ApiConfig {
 
   // ── Global Events module endpoints (PRD Section 7.4) ─────────
   static String get events => "$baseUrl/event";
+  static String get bulkEvents => "$baseUrl/event/bulk";
   static String get eventCategories => "$baseUrl/event/categories";
   static String get upcomingEvents => "$baseUrl/event/upcoming";
   static String get nearbyEvents => "$baseUrl/event/nearby";
@@ -328,6 +334,24 @@ class ApiConfig {
   static String societyVisitor(int id) => "$baseUrl/society-visitor/$id";
   static String societyVisitorStatus(int id) =>
       "$baseUrl/society-visitor/$id/status";
+
+  // Society Documents (PRD 18.4)
+  static String get societyDocuments => "$baseUrl/society-document";
+  static String societyDocument(int id) => "$baseUrl/society-document/$id";
+  static String societyDocumentsBySociety(int societyId) => "$baseUrl/societies/$societyId/documents";
+
+  // Society Emergency Contacts & Alerts (PRD 21.5 / 22.5)
+  static String get societyEmergencyContacts => "$baseUrl/society-emergency-contact";
+  static String societyEmergencyContact(int id) => "$baseUrl/society-emergency-contact/$id";
+  static String societyEmergencyContactsBySociety(int societyId) => "$baseUrl/societies/$societyId/emergency-contacts";
+  static String societyEmergencyAlert(int societyId) => "$baseUrl/societies/$societyId/emergency-alert";
+
+  // Event Invitations & Chat (PRD 7.4)
+  static String get eventInvitations => "$baseUrl/event-invitation";
+  static String eventInvitationRespond(int id) => "$baseUrl/event-invitation/$id/respond";
+  static String sendEventInvitations(int eventId) => "$baseUrl/event/$eventId/invitations";
+  static String eventChat(int eventId) => "$baseUrl/event/$eventId/chat";
+
 
   // ── Services Module Endpoints (PRD Sections 7.3 & 18.8) ────
   static String get serviceCategories => "$baseUrl/service-category";

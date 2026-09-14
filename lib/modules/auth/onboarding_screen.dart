@@ -79,14 +79,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Image.asset(
-                    'assets/images/logosmartgali.png',
-                    height: 38,
-                    errorBuilder: (ctx, err, stack) => const Text(
-                      'smartgali',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: _brandGreen,
+                    'assets/images/logosmartgali_horizontal.png',
+                    height: 52,
+                    fit: BoxFit.contain,
+                    errorBuilder: (ctx, err, stack) => Image.asset(
+                      'assets/images/logosmartgali.png',
+                      height: 52,
+                      fit: BoxFit.contain,
+                      errorBuilder: (ctx, err, stack) => const Text(
+                        'smartgali',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: _brandGreen,
+                        ),
                       ),
                     ),
                   ),

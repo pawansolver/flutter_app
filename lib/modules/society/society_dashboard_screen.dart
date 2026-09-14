@@ -4,8 +4,16 @@ import 'society_operations_screen.dart';
 import 'announcements_screen.dart';
 import 'documents_screen.dart';
 import 'parking_screen.dart';
+import 'society_profile_screen.dart';
+import 'society_members_screen.dart';
+import 'society_emergency_contacts_screen.dart';
+import '../events/events_screen.dart';
+import '../events/event_detail_screen.dart';
 import '../../services/society_service.dart';
+import '../../services/event_service.dart';
+import '../../services/auth_session.dart';
 import '../../models/society_models.dart';
+import '../../models/event_model.dart';
 
 class SocietyDashboardScreen extends StatefulWidget {
   final int? initialSocietyId;
@@ -22,6 +30,8 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
   String? _errorMessage;
   SocietyProfileModel? _activeSociety;
   List<SocietyAnnouncementModel> _announcements = [];
+  List<EventModel> _societyEvents = [];
+  String _userRole = 'resident';
 
   @override
   void initState() {
@@ -55,6 +65,40 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
           limit: 3,
         );
         _announcements = annRes.data;
+
+        // Resolve user's role in society
+        final currentUserId = await AuthSessionStore().readUserId();
+        if (currentUserId != null) {
+          if (_activeSociety!.userId == currentUserId || _activeSociety!.createdBy == currentUserId) {
+            _userRole = 'admin';
+          } else {
+            try {
+              final membersRes = await _societyService.getMembers(_activeSociety!.id, limit: 100);
+              final myMember = membersRes.data.firstWhere(
+                (m) => m.userId == currentUserId,
+                orElse: () => const SocietyMemberModel(
+                  id: 0,
+                  societyId: 0,
+                  userId: 0,
+                  role: 'resident',
+                  status: 'active',
+                ),
+              );
+              if (myMember.id > 0) {
+                _userRole = myMember.role.toLowerCase();
+              }
+            } catch (_) {}
+          }
+        }
+
+        // Load upcoming society events
+        try {
+          final eventsRes = await EventService().getUpcomingEvents(
+            societyId: _activeSociety!.id,
+            limit: 3,
+          );
+          _societyEvents = eventsRes.events;
+        } catch (_) {}
       }
     } catch (e) {
       _errorMessage = e.toString();
@@ -86,6 +130,9 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
     {'title': 'Parking', 'icon': Icons.local_parking, 'tab': -1, 'route': 'parking'},
     {'title': 'Documents', 'icon': Icons.description_outlined, 'tab': -1, 'route': 'documents'},
     {'title': 'Polls', 'icon': Icons.poll_outlined, 'tab': 2, 'route': 'ops'},
+    {'title': 'Events', 'icon': Icons.event_outlined, 'tab': -1, 'route': 'events'},
+    {'title': 'Emergency', 'icon': Icons.emergency_outlined, 'tab': -1, 'route': 'emergency'},
+    {'title': 'Members', 'icon': Icons.groups_outlined, 'tab': -1, 'route': 'members'},
   ];
 
   void _onQuickActionTap(Map<String, dynamic> action) {
@@ -103,7 +150,7 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
         break;
       case 'announcements':
         Navigator.push(context, MaterialPageRoute(
-          builder: (_) => AnnouncementsScreen(societyId: societyId),
+          builder: (_) => AnnouncementsScreen(societyId: societyId, userRole: _userRole),
         ));
         break;
       case 'parking':
@@ -113,7 +160,22 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
         break;
       case 'documents':
         Navigator.push(context, MaterialPageRoute(
-          builder: (_) => const DocumentsScreen(),
+          builder: (_) => DocumentsScreen(societyId: societyId, userRole: _userRole),
+        ));
+        break;
+      case 'events':
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => EventsScreen(societyId: societyId, societyName: _activeSociety?.societyName),
+        ));
+        break;
+      case 'emergency':
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => SocietyEmergencyContactsScreen(societyId: societyId ?? 0, userRole: _userRole),
+        ));
+        break;
+      case 'members':
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => SocietyMembersScreen(societyId: societyId ?? 0, userRole: _userRole),
         ));
         break;
     }
@@ -329,14 +391,48 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
             icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
             onPressed: _handleBack,
           ),
-          title: Text(
-            _activeSociety?.societyName ?? 'My Society Dashboard',
-            style: const TextStyle(
-              color: Color(0xFF111827),
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _activeSociety?.societyName ?? 'My Society Dashboard',
+                style: const TextStyle(
+                  color: Color(0xFF111827),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (_activeSociety != null)
+                Text(
+                  'Role: ${_userRole.toUpperCase()}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: _userRole == 'admin' ? const Color(0xFFDC2626) : const Color(0xFF2563EB),
+                  ),
+                ),
+            ],
           ),
+          actions: [
+            if (_activeSociety != null)
+              IconButton(
+                icon: const Icon(Icons.info_outline, color: Color(0xFF111827)),
+                tooltip: 'Society Profile',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SocietyProfileScreen(
+                        societyId: _activeSociety!.id,
+                        userRole: _userRole,
+                      ),
+                    ),
+                  ).then((_) => _loadDashboardData());
+                },
+              ),
+          ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1.0),
             child: Container(
@@ -533,8 +629,15 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
                           ),
                         )),
                       GestureDetector(
-                        onTap: () => Navigator.push(context,
-                            MaterialPageRoute(builder: (_) => AnnouncementsScreen(societyId: _activeSociety?.id))),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AnnouncementsScreen(
+                              societyId: _activeSociety?.id,
+                              userRole: _userRole,
+                            ),
+                          ),
+                        ),
                         child: const Padding(
                           padding: EdgeInsets.only(top: 4, bottom: 4),
                           child: Row(
@@ -555,6 +658,101 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 32),
+
+                      // ── Society Events Preview Section ──
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Society Events',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF111827),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EventsScreen(
+                                  societyId: _activeSociety?.id,
+                                  societyName: _activeSociety?.societyName,
+                                ),
+                              ),
+                            ),
+                            child: const Row(
+                              children: [
+                                Text(
+                                  'View all',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFFF6B00),
+                                  ),
+                                ),
+                                SizedBox(width: 4),
+                                Icon(Icons.arrow_forward_ios, size: 11, color: Color(0xFFFF6B00)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      if (_societyEvents.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: const Text(
+                            'No upcoming society events scheduled.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+                          ),
+                        )
+                      else
+                        ..._societyEvents.map((ev) => Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: ListTile(
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.event, color: Color(0xFF2563EB)),
+                            ),
+                            title: Text(ev.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text(
+                              [
+                                if (ev.startAt != null)
+                                  '${ev.startAt!.day}/${ev.startAt!.month}/${ev.startAt!.year}',
+                                if (ev.locationName != null && ev.locationName!.isNotEmpty)
+                                  ev.locationName!,
+                              ].join(' • '),
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            trailing: const Icon(Icons.chevron_right, color: Color(0xFF9CA3AF)),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => EventDetailScreen(eventId: ev.id),
+                                ),
+                              );
+                            },
+                          ),
+                        )),
                       const SizedBox(height: 32),
                       SizedBox(
                         width: double.infinity,

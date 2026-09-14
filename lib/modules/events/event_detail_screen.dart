@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../models/event_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/event_service.dart';
 import '../../services/community_service.dart';
 import '../../models/community_models.dart';
+import '../chat/chat_window_screen.dart';
 import 'event_participants_screen.dart';
 import 'widgets/edit_event_sheet.dart';
+import 'widgets/invite_friends_sheet.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final int eventId;
@@ -211,6 +214,121 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     return DateFormat('EEEE, MMMM d, yyyy • hh:mm a').format(dt);
   }
 
+  Future<void> _shareEvent() async {
+    if (_event == null) return;
+    final event = _event!;
+    final dateStr = event.startAt != null ? DateFormat('MMM d, yyyy • h:mm a').format(event.startAt!) : '';
+    final text = 'Join "${event.title}" on SmartGali!\n'
+        'Date: $dateStr\n'
+        'Location: ${event.venueDisplay}\n'
+        'View event: https://smartgali.com/events/${event.id}';
+    await Share.share(text, subject: event.title);
+  }
+
+  void _openInviteFriends() {
+    if (_event == null) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => InviteFriendsSheet(
+        eventId: _event!.id,
+        eventTitle: _event!.title,
+      ),
+    );
+  }
+
+  Future<void> _openEventChat() async {
+    if (_event == null) return;
+    if (_event!.isCancelled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chat is unavailable because this event has been cancelled.')),
+      );
+      return;
+    }
+
+    if (_currentUserId == null) {
+      await _loadCurrentUser();
+      if (!mounted) return;
+    }
+
+    // If user is not creator, not global admin, and not RSVP'd: prompt user to RSVP to participate
+    final hasActiveRsvp = _event!.myRsvpStatus == 'going' || _event!.myRsvpStatus == 'interested';
+    if (!_isCreator && !_isGlobalAdmin && !hasActiveRsvp) {
+      final selectedRsvp = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.forum_outlined, color: Color(0xFF4F46E5)),
+              SizedBox(width: 8),
+              Text('Event Discussion', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            'RSVP (Going or Interested) is required to join the event discussion. Would you like to RSVP now?',
+            style: TextStyle(fontSize: 14, color: Color(0xFF4B5563)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(ctx, 'interested'),
+              child: const Text('Interested'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, 'going'),
+              child: const Text('Going'),
+            ),
+          ],
+        ),
+      );
+
+      if (selectedRsvp == null || !mounted) return;
+      await _handleRsvp(selectedRsvp);
+      if (!mounted) return;
+    }
+
+    setState(() => _isActionLoading = true);
+    try {
+      final chatData = await _eventService.getOrCreateEventChat(_event!.id);
+      final rawChatId = chatData['id'];
+      final chatId = rawChatId is int
+          ? rawChatId
+          : int.tryParse(rawChatId?.toString() ?? '');
+      if (chatId != null && mounted) {
+        setState(() => _isActionLoading = false);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatWindowScreen(
+              chatId: chatId,
+              chatName: chatData['name']?.toString() ?? _event!.title,
+              isOnline: false,
+              currentUserId: _currentUserId ?? 0,
+            ),
+          ),
+        );
+      } else {
+        throw Exception('Invalid chat response from server');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isActionLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open chat: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   // ── Owner Actions ─────────────────────────────────────────────
 
   void _openEdit() {
@@ -317,7 +435,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Widget build(BuildContext context) {
     if (_isLoading && _event == null) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFFF18D38))),
       );
     }
 
@@ -336,6 +454,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: _fetchDetails,
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF18D38), foregroundColor: Colors.white),
                   child: const Text('Retry'),
                 ),
               ],
@@ -373,39 +492,66 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))),
                 )
-              else if (_hasManagementPrivileges)
-                PopupMenuButton<String>(
+              else ...[
+                IconButton(
                   icon: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: 0.4),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+                    child: const Icon(Icons.share, color: Colors.white, size: 18),
                   ),
-                  onSelected: (val) {
-                    if (val == 'edit') _openEdit();
-                    if (val == 'cancel') _handleCancel();
-                    if (val == 'delete') _handleDelete();
-                  },
-                  itemBuilder: (_) => [
-                    if (_canEdit)
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: Color(0xFF2563EB)), SizedBox(width: 10), Text('Edit Event', style: TextStyle(fontWeight: FontWeight.w600))]),
-                      ),
-                    if (_canCancel)
-                      const PopupMenuItem(
-                        value: 'cancel',
-                        child: Row(children: [Icon(Icons.cancel_outlined, size: 18, color: Color(0xFFD97706)), SizedBox(width: 10), Text('Cancel Event', style: TextStyle(fontWeight: FontWeight.w600))]),
-                      ),
-                    if (_canDelete)
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Color(0xFFDC2626)), SizedBox(width: 10), Text('Delete Event', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFDC2626)))]),
-                      ),
-                  ],
+                  tooltip: 'Share Event',
+                  onPressed: _shareEvent,
                 ),
+                if (_event != null && !_event!.isCancelled)
+                  IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.person_add_alt_1, color: Colors.white, size: 18),
+                    ),
+                    tooltip: 'Invite Friends',
+                    onPressed: _openInviteFriends,
+                  ),
+                if (_hasManagementPrivileges)
+                  PopupMenuButton<String>(
+                    icon: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+                    ),
+                    onSelected: (val) {
+                      if (val == 'edit') _openEdit();
+                      if (val == 'cancel') _handleCancel();
+                      if (val == 'delete') _handleDelete();
+                    },
+                    itemBuilder: (_) => [
+                      if (_canEdit)
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: Color(0xFFF18D38)), SizedBox(width: 10), Text('Edit Event', style: TextStyle(fontWeight: FontWeight.w600))]),
+                        ),
+                      if (_canCancel)
+                        const PopupMenuItem(
+                          value: 'cancel',
+                          child: Row(children: [Icon(Icons.cancel_outlined, size: 18, color: Color(0xFFD97706)), SizedBox(width: 10), Text('Cancel Event', style: TextStyle(fontWeight: FontWeight.w600))]),
+                        ),
+                      if (_canDelete)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Color(0xFFDC2626)), SizedBox(width: 10), Text('Delete Event', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFDC2626)))]),
+                        ),
+                    ],
+                  ),
+                ],
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: hasCover
@@ -415,7 +561,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         Image.network(
                           event.coverImage!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1E293B)),
+                          errorBuilder: (_, _, _) => Container(color: const Color(0xFF1E293B)),
                         ),
                         Container(
                           decoration: BoxDecoration(
@@ -435,7 +581,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   : Container(
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                          colors: [Color(0xFFF18D38), Color(0xFFD97706)],
                         ),
                       ),
                     ),
@@ -458,16 +604,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
+                            color: const Color(0xFFFFF4EC),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFFBFDBFE)),
+                            border: Border.all(color: const Color(0xFFFFCB99)),
                           ),
                           child: Text(
                             '${event.category?.icon ?? ''} ${event.category?.name ?? ''}'.trim(),
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF1D4ED8),
+                              color: Color(0xFFC2410C),
                             ),
                           ),
                         ),
@@ -531,10 +677,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
+                            color: const Color(0xFFFFF4EC),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(Icons.calendar_today, color: Color(0xFF2563EB), size: 22),
+                          child: const Icon(Icons.calendar_today, color: Color(0xFFF18D38), size: 22),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -681,12 +827,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         children: [
                           CircleAvatar(
                             radius: 20,
-                            backgroundColor: const Color(0xFFE0E7FF),
+                            backgroundColor: const Color(0xFFFFF4EC),
                             child: Text(
                               event.creator!.userName.isNotEmpty
                                   ? event.creator!.userName[0].toUpperCase()
                                   : 'H',
-                              style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF4338CA)),
+                              style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFF18D38)),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -757,6 +903,120 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             const Icon(Icons.chevron_right, color: Color(0xFF9CA3AF)),
                           ],
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // ── Event Discussion & Invitation CTAs ──────────
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: event.isCancelled ? null : _openEventChat,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: event.isCancelled ? Colors.grey.shade100 : const Color(0xFFFFF4EC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: event.isCancelled ? Colors.grey.shade300 : const Color(0xFFFFCB99),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.chat_bubble_outline,
+                                  size: 18,
+                                  color: event.isCancelled ? Colors.grey : const Color(0xFFF18D38),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Event Discussion',
+                                  style: TextStyle(
+                                    color: event.isCancelled ? Colors.grey : const Color(0xFFC2410C),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (!event.isCancelled) ...[
+                        const SizedBox(width: 10),
+                        InkWell(
+                          onTap: _openInviteFriends,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.green.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.person_add_outlined, size: 18, color: Colors.green.shade800),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Invite',
+                                  style: TextStyle(
+                                    color: Colors.green.shade900,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── Enterprise Event Schedule & Timeline (Sub-Events) ──
+                  if (event.subEvents.isNotEmpty) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Schedule & Agenda',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF4EC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFFFCB99)),
+                          ),
+                          child: Text(
+                            '${event.subEvents.length} Activities',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFC2410C)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: Column(
+                        children: [
+                          for (int i = 0; i < event.subEvents.length; i++) ...[
+                            _buildTimelineItem(event.subEvents[i], isLast: i == event.subEvents.length - 1),
+                          ],
+                        ],
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -864,6 +1124,349 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  IconData _getActivityIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'ceremony':
+        return Icons.celebration;
+      case 'competition':
+        return Icons.emoji_events;
+      case 'sports':
+        return Icons.sports_soccer;
+      case 'cultural':
+        return Icons.theater_comedy;
+      case 'dining':
+        return Icons.restaurant;
+      case 'workshop':
+        return Icons.lightbulb_outline;
+      case 'meeting':
+        return Icons.groups;
+      default:
+        return Icons.event_note;
+    }
+  }
+
+  Color _getActivityColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'ceremony':
+        return const Color(0xFFEA580C);
+      case 'competition':
+        return const Color(0xFF7C3AED);
+      case 'sports':
+        return const Color(0xFF059669);
+      case 'cultural':
+        return const Color(0xFFDB2777);
+      case 'dining':
+        return const Color(0xFF0D9488);
+      case 'workshop':
+        return const Color(0xFF2563EB);
+      case 'meeting':
+        return const Color(0xFF4F46E5);
+      default:
+        return const Color(0xFFF18D38);
+    }
+  }
+
+  Color _getActivityBgColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'ceremony':
+        return const Color(0xFFFFF7ED);
+      case 'competition':
+        return const Color(0xFFF5F3FF);
+      case 'sports':
+        return const Color(0xFFECFDF5);
+      case 'cultural':
+        return const Color(0xFFFDF2F8);
+      case 'dining':
+        return const Color(0xFFF0FDFA);
+      case 'workshop':
+        return const Color(0xFFEFF6FF);
+      case 'meeting':
+        return const Color(0xFFEEF2FF);
+      default:
+        return const Color(0xFFFFF4EC);
+    }
+  }
+
+  Widget _buildTimelineItem(SubEventModel sub, {required bool isLast}) {
+    final actColor = _getActivityColor(sub.activityType);
+    final actBgColor = _getActivityBgColor(sub.activityType);
+    final actIcon = _getActivityIcon(sub.activityType);
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Timeline indicator line & icon dot
+          Column(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: actBgColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: actColor, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: actColor.withValues(alpha: 0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Icon(actIcon, size: 14, color: actColor),
+                ),
+              ),
+              if (!isLast)
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: const Color(0xFFE5E7EB),
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          // Sub-Event Content
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top Meta Row: Activity Badge & Time Pill
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: actBgColor,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: actColor.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          sub.activityType.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: actColor,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      if (sub.startTime != null && sub.startTime!.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.access_time, size: 11, color: Color(0xFF6B7280)),
+                              const SizedBox(width: 3),
+                              Text(
+                                sub.endTime != null && sub.endTime!.isNotEmpty
+                                    ? '${sub.startTime} - ${sub.endTime}'
+                                    : sub.startTime!,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF374151),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Title
+                  Text(
+                    sub.title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                      height: 1.25,
+                    ),
+                  ),
+
+                  // Sub-Event Banner Poster (if available)
+                  if (sub.coverImage != null && sub.coverImage!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        sub.coverImage!,
+                        height: 130,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      ),
+                    ),
+                  ],
+
+                  // Date (if set and different)
+                  if (sub.date != null && sub.date!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.calendar_today_outlined, size: 12, color: Color(0xFF6B7280)),
+                        const SizedBox(width: 4),
+                        Text(
+                          sub.date!,
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563), fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  // Venue & Speaker / Host
+                  if ((sub.venue != null && sub.venue!.isNotEmpty) ||
+                      (sub.speakerOrHost != null && sub.speakerOrHost!.isNotEmpty)) ...[
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
+                      children: [
+                        if (sub.venue != null && sub.venue!.isNotEmpty)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.location_on_outlined, size: 13, color: Color(0xFFD97706)),
+                              const SizedBox(width: 3),
+                              Text(
+                                sub.venue!,
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563), fontWeight: FontWeight.w500),
+                              ),
+                            ],
+                          ),
+                        if (sub.speakerOrHost != null && sub.speakerOrHost!.isNotEmpty)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.person_outline, size: 13, color: Color(0xFF2563EB)),
+                              const SizedBox(width: 3),
+                              Text(
+                                sub.speakerOrHost!,
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF2563EB), fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ],
+
+                  // Badges: Capacity & Registration Status
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      if (sub.capacity != null && sub.capacity! > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.people_outline, size: 11, color: Color(0xFF4B5563)),
+                              const SizedBox(width: 3),
+                              Text(
+                                '${sub.capacity} Spots Max',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (sub.isRegistrationRequired)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFFCD34D)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.assignment_turned_in_outlined, size: 11, color: Color(0xFFB45309)),
+                              SizedBox(width: 3),
+                              Text(
+                                'Registration Required',
+                                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFFB45309)),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'Open Entry',
+                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFF059669)),
+                          ),
+                        ),
+                      if (sub.status != 'scheduled')
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: sub.status == 'ongoing'
+                                ? const Color(0xFFDCFCE7)
+                                : const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            sub.status.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: sub.status == 'ongoing' ? const Color(0xFF15803D) : const Color(0xFF6B7280),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+
+                  // Description / Guidelines / Rules
+                  if (sub.description != null && sub.description!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFF3F4F6)),
+                      ),
+                      child: Text(
+                        sub.description!,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563), height: 1.45),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

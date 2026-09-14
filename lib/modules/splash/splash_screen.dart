@@ -71,37 +71,34 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ColorFiltered(
-              colorFilter: const ColorFilter.mode(
-                Color(0xFFE1EAE4),
-                BlendMode.multiply,
+            Image.asset(
+              'assets/images/logosmartgali.png',
+              width: 220,
+              height: 200,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => Column(
+                children: const [
+                  Icon(
+                    Icons.location_on,
+                    size: 100,
+                    color: Color(0xFFFF6B00),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'smartgali',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    "India's neighbourhood Network",
+                    style: TextStyle(fontSize: 16, color: Color(0xFF10B981)),
+                  ),
+                ],
               ),
-              child: Image.asset(
-                'assets/images/jg.png',
-                width: 150,
-                height: 200,
-                fit: BoxFit.contain,
-                // If the logo image is not found, fallback to an icon for now
-                errorBuilder: (context, error, stackTrace) => const Icon(
-                  Icons.location_on,
-                  size: 150,
-                  color: Color(0xFFFF6B00),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'smartgali',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF111827),
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'India\'s neighbourhood Network',
-              style: TextStyle(fontSize: 16, color: Color(0xFF10B981)),
             ),
           ],
         ),

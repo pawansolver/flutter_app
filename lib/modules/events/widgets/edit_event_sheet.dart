@@ -55,6 +55,7 @@ class _EditEventSheetState extends State<EditEventSheet> {
   late DateTime _startDate;
   late TimeOfDay _startTime;
   late String _eventType;
+  late String _visibility;
   int? _selectedCategoryId;
   List<EventCategoryModel> _categories = [];
   bool _isLoadingCategories = true;
@@ -77,6 +78,7 @@ class _EditEventSheetState extends State<EditEventSheet> {
         ? TimeOfDay(hour: e.startAt!.hour, minute: e.startAt!.minute)
         : const TimeOfDay(hour: 18, minute: 0);
     _eventType = e.eventType;
+    _visibility = e.visibility.isNotEmpty ? e.visibility : 'public';
     _selectedCategoryId = e.categoryId;
     _loadCategories();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -176,6 +178,7 @@ class _EditEventSheetState extends State<EditEventSheet> {
         description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
         categoryId: _selectedCategoryId,
         eventType: _eventType,
+        visibility: _visibility,
         startAt: startAt,
         location: _venueController.text.trim().isEmpty ? null : _venueController.text.trim(),
         locationName: _venueController.text.trim().isEmpty ? null : _venueController.text.trim(),
@@ -270,11 +273,21 @@ class _EditEventSheetState extends State<EditEventSheet> {
                 ]),
                 const SizedBox(height: 16),
 
+                // Visibility Selector
+                const Text('Visibility', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF4B5563))),
+                const SizedBox(height: 6),
+                Row(children: [
+                  _visibilityChip('public', '🌐 Public'), const SizedBox(width: 8),
+                  _visibilityChip('community', '👥 Community/Society'), const SizedBox(width: 8),
+                  _visibilityChip('private', '🔒 Private'),
+                ]),
+                const SizedBox(height: 16),
+
                 // Date & Time
                 Row(children: [
-                  Expanded(child: InkWell(onTap: _pickDate, borderRadius: BorderRadius.circular(12), child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14), decoration: BoxDecoration(border: Border.all(color: const Color(0xFFD1D5DB)), borderRadius: BorderRadius.circular(12)), child: Row(children: [const Icon(Icons.calendar_today, size: 16, color: Color(0xFF2563EB)), const SizedBox(width: 8), Text(DateFormat('MMM dd, yyyy').format(_startDate), style: const TextStyle(fontWeight: FontWeight.w600))])))),
+                  Expanded(child: InkWell(onTap: _pickDate, borderRadius: BorderRadius.circular(12), child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14), decoration: BoxDecoration(border: Border.all(color: const Color(0xFFD1D5DB)), borderRadius: BorderRadius.circular(12)), child: Row(children: [const Icon(Icons.calendar_today, size: 16, color: Color(0xFFF18D38)), const SizedBox(width: 8), Text(DateFormat('MMM dd, yyyy').format(_startDate), style: const TextStyle(fontWeight: FontWeight.w600))])))),
                   const SizedBox(width: 12),
-                  Expanded(child: InkWell(onTap: _pickTime, borderRadius: BorderRadius.circular(12), child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14), decoration: BoxDecoration(border: Border.all(color: const Color(0xFFD1D5DB)), borderRadius: BorderRadius.circular(12)), child: Row(children: [const Icon(Icons.access_time, size: 16, color: Color(0xFF2563EB)), const SizedBox(width: 8), Text(_startTime.format(context), style: const TextStyle(fontWeight: FontWeight.w600))])))),
+                  Expanded(child: InkWell(onTap: _pickTime, borderRadius: BorderRadius.circular(12), child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14), decoration: BoxDecoration(border: Border.all(color: const Color(0xFFD1D5DB)), borderRadius: BorderRadius.circular(12)), child: Row(children: [const Icon(Icons.access_time, size: 16, color: Color(0xFFF18D38)), const SizedBox(width: 8), Text(_startTime.format(context), style: const TextStyle(fontWeight: FontWeight.w600))])))),
                 ]),
                 const SizedBox(height: 12),
 
@@ -321,7 +334,7 @@ class _EditEventSheetState extends State<EditEventSheet> {
                   width: double.infinity, height: 50,
                   child: ElevatedButton(
                     onPressed: _isSubmitting ? null : _submit,
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF18D38), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                     child: _isSubmitting
                         ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
@@ -346,11 +359,31 @@ class _EditEventSheetState extends State<EditEventSheet> {
           padding: const EdgeInsets.symmetric(vertical: 8),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFEFF6FF) : const Color(0xFFF3F4F6),
+            color: isSelected ? const Color(0xFFFFF4EC) : const Color(0xFFF3F4F6),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB)),
+            border: Border.all(color: isSelected ? const Color(0xFFF18D38) : const Color(0xFFE5E7EB)),
           ),
-          child: Text(label, style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF4B5563)), maxLines: 1, overflow: TextOverflow.ellipsis),
+          child: Text(label, style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, color: isSelected ? const Color(0xFFF18D38) : const Color(0xFF4B5563)), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      ),
+    );
+  }
+
+  Widget _visibilityChip(String vis, String label) {
+    final isSelected = _visibility == vis;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _visibility = vis),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFFFF4EC) : const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: isSelected ? const Color(0xFFF18D38) : const Color(0xFFE5E7EB)),
+          ),
+          child: Text(label, style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, color: isSelected ? const Color(0xFFF18D38) : const Color(0xFF4B5563)), maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
       ),
     );

@@ -32,7 +32,24 @@ class FeedService {
     return Options(headers: {'Authorization': 'Bearer $token'});
   }
 
-  // 1. GET Home Feed
+  // 1. GET Single Post by ID
+  Future<FeedResult<FeedPost>> getPostById(int postId) async {
+    try {
+      final resp = await _dio.get(
+        '$_base/post/$postId',
+        options: await _authOptions(),
+      );
+      if (resp.statusCode == 200 && resp.data['success'] == true) {
+        return FeedResult.success(FeedPost.fromJson(resp.data['data'] as Map<String, dynamic>));
+      }
+      return FeedResult.failure(resp.data['message'] ?? 'Failed to load post');
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'] ?? e.message ?? 'Network error';
+      return FeedResult.failure(msg);
+    }
+  }
+
+  // 1b. GET Home Feed
   Future<FeedResult<Map<String, dynamic>>> getHomeFeed({
     int limit = 10,
     String? cursor,

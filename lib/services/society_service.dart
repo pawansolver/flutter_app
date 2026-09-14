@@ -910,4 +910,169 @@ class SocietyService {
       throw _formatDioError(e, 'Failed to update visitor status');
     }
   }
+
+  // ─── 9. Society Documents APIs (PRD 18.4) ─────────────────────────────────
+  Future<SocietyPaginatedResponse<SocietyDocumentModel>> getDocuments(
+    int societyId, {
+    String? category,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    try {
+      final opts = await _authOptions();
+      final query = <String, dynamic>{
+        'society_id': societyId,
+        'page': page,
+        'limit': limit,
+        if (category != null && category.isNotEmpty) 'category': category,
+      };
+      final res = await _dio.get(
+        ApiConfig.societyDocuments,
+        queryParameters: query,
+        options: opts,
+      );
+      final body = _toMap(res.data);
+      return SocietyPaginatedResponse<SocietyDocumentModel>.fromJson(
+        body,
+        (item) => SocietyDocumentModel.fromJson(_toMap(item)),
+      );
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to load society documents');
+    }
+  }
+
+  Future<SocietyDocumentModel> createDocument(
+    int societyId, {
+    required String title,
+    String? description,
+    required String category,
+    required String filePath,
+    String? fileName,
+  }) async {
+    try {
+      final opts = await _authOptions();
+      final formData = FormData.fromMap({
+        'society_id': societyId,
+        'title': title.trim(),
+        if (description != null) 'description': description.trim(),
+        'category': category,
+        'file': await MultipartFile.fromFile(filePath, filename: fileName),
+      });
+      final res = await _dio.post(
+        ApiConfig.societyDocuments,
+        data: formData,
+        options: opts,
+      );
+      final body = _toMap(res.data);
+      final data = body['data'];
+      if (data is Map) {
+        return SocietyDocumentModel.fromJson(_toMap(data));
+      }
+      throw const SocietyServiceException('Invalid document upload response');
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to upload society document');
+    }
+  }
+
+  Future<void> deleteDocument(int id) async {
+    try {
+      final opts = await _authOptions();
+      await _dio.delete(ApiConfig.societyDocument(id), options: opts);
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to delete society document');
+    }
+  }
+
+  // ─── 13. Society Emergency Contacts & Alerts (PRD 21.5 / 22.5) ─────────────
+  Future<List<SocietyEmergencyContactModel>> getEmergencyContacts(
+    int societyId, {
+    String? category,
+  }) async {
+    try {
+      final opts = await _authOptions();
+      final query = <String, dynamic>{
+        'society_id': societyId,
+        if (category != null && category.isNotEmpty) 'category': category,
+      };
+      final res = await _dio.get(
+        ApiConfig.societyEmergencyContacts,
+        queryParameters: query,
+        options: opts,
+      );
+      final body = _toMap(res.data);
+      final rawList = body['data'] as List? ?? [];
+      return rawList
+          .whereType<Map<String, dynamic>>()
+          .map((m) => SocietyEmergencyContactModel.fromJson(m))
+          .toList();
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to load emergency contacts');
+    }
+  }
+
+  Future<SocietyEmergencyContactModel> createEmergencyContact(
+    int societyId, {
+    required String name,
+    String? designation,
+    required String phone,
+    String? altPhone,
+    String category = 'other',
+  }) async {
+    try {
+      final opts = await _authOptions();
+      final body = <String, dynamic>{
+        'society_id': societyId,
+        'name': name.trim(),
+        if (designation != null) 'designation': designation.trim(),
+        'phone': phone.trim(),
+        if (altPhone != null) 'alt_phone': altPhone.trim(),
+        'category': category,
+      };
+      final res = await _dio.post(
+        ApiConfig.societyEmergencyContacts,
+        data: body,
+        options: opts,
+      );
+      final resBody = _toMap(res.data);
+      final data = resBody['data'];
+      if (data is Map) {
+        return SocietyEmergencyContactModel.fromJson(_toMap(data));
+      }
+      throw const SocietyServiceException('Invalid emergency contact response');
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to add emergency contact');
+    }
+  }
+
+  Future<void> deleteEmergencyContact(int id) async {
+    try {
+      final opts = await _authOptions();
+      await _dio.delete(ApiConfig.societyEmergencyContact(id), options: opts);
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to delete emergency contact');
+    }
+  }
+
+  Future<void> broadcastEmergencyAlert(
+    int societyId, {
+    required String title,
+    required String message,
+    String severity = 'high',
+  }) async {
+    try {
+      final opts = await _authOptions();
+      final body = <String, dynamic>{
+        'title': title.trim(),
+        'message': message.trim(),
+        'severity': severity,
+      };
+      await _dio.post(
+        ApiConfig.societyEmergencyAlert(societyId),
+        data: body,
+        options: opts,
+      );
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to broadcast emergency alert');
+    }
+  }
 }

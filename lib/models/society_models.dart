@@ -93,6 +93,7 @@ class SocietyProfileModel {
   final int? createdBy;
   final Map<String, dynamic>? adminUser;
   final DateTime? createdAt;
+  final String? userRole;
 
   const SocietyProfileModel({
     required this.id,
@@ -106,9 +107,16 @@ class SocietyProfileModel {
     this.createdBy,
     this.adminUser,
     this.createdAt,
+    this.userRole,
   });
 
   factory SocietyProfileModel.fromJson(Map<String, dynamic> json) {
+    String? resolvedRole;
+    if (json['membership'] is Map) {
+      resolvedRole = _asString(json['membership']['role']);
+    }
+    resolvedRole ??= _asString(json['role'] ?? json['userRole']);
+
     return SocietyProfileModel(
       id: _asInt(json['id'] ?? json['societyId']) ?? 0,
       userId: _asInt(json['user_id'] ?? json['userId']),
@@ -121,6 +129,7 @@ class SocietyProfileModel {
       createdBy: _asInt(json['created_by'] ?? json['createdBy']),
       adminUser: json['admin_user'] as Map<String, dynamic>?,
       createdAt: _asDateTime(json['created_at'] ?? json['createdAt']),
+      userRole: resolvedRole,
     );
   }
 
@@ -171,6 +180,9 @@ class SocietyMemberModel {
       _asString(user?['userName'] ?? user?['name']) ?? 'Resident #$userId';
   String get memberPhone => _asString(user?['phone']) ?? '';
   String get memberEmail => _asString(user?['email']) ?? '';
+  String get userName => memberName;
+  String get userPhone => memberPhone;
+  String get userEmail => memberEmail;
 
   factory SocietyMemberModel.fromJson(Map<String, dynamic> json) {
     return SocietyMemberModel(
@@ -302,6 +314,7 @@ class SocietyComplaintModel {
 
   String get complainantName =>
       _asString(user?['userName'] ?? user?['name']) ?? 'Resident #$userId';
+  String get raisedByName => complainantName;
   String get assigneeName =>
       _asString(assignee?['userName'] ?? assignee?['name']) ?? '';
 
@@ -648,5 +661,158 @@ class SocietyVisitorModel {
     'flat_no': flatNo,
     'expected_time': expectedTime?.toIso8601String(),
     'status': status,
+  };
+}
+
+// ─── 8. Society Document Model ──────────────────────────────────────────────
+class SocietyDocumentModel {
+  final int id;
+  final int societyId;
+  final String title;
+  final String? description;
+  final String fileUrl;
+  final String? fileType;
+  final int? fileSize;
+  final String category; // 'bye_laws', 'agm_minutes', 'financial_report', 'noc_rules', 'circular', 'other'
+  final int? uploadedBy;
+  final Map<String, dynamic>? uploader;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  const SocietyDocumentModel({
+    required this.id,
+    required this.societyId,
+    required this.title,
+    this.description,
+    required this.fileUrl,
+    this.fileType,
+    this.fileSize,
+    this.category = 'other',
+    this.uploadedBy,
+    this.uploader,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  String get uploaderName =>
+      _asString(uploader?['userName'] ?? uploader?['name']) ??
+      (uploadedBy != null ? 'User #$uploadedBy' : 'Admin');
+
+  String get categoryDisplayName {
+    switch (category) {
+      case 'bye_laws':
+        return 'Bye-Laws';
+      case 'agm_minutes':
+        return 'AGM Minutes';
+      case 'financial_report':
+        return 'Financial Report';
+      case 'noc_rules':
+        return 'NOC / Rules';
+      case 'circular':
+        return 'Circular';
+      default:
+        return 'General Document';
+    }
+  }
+
+  factory SocietyDocumentModel.fromJson(Map<String, dynamic> json) {
+    return SocietyDocumentModel(
+      id: _asInt(json['id']) ?? 0,
+      societyId: _asInt(json['society_id'] ?? json['societyId']) ?? 0,
+      title: _asString(json['title']) ?? '',
+      description: _asString(json['description']),
+      fileUrl: _asString(json['file_url'] ?? json['fileUrl']) ?? '',
+      fileType: _asString(json['file_type'] ?? json['fileType']),
+      fileSize: _asInt(json['file_size'] ?? json['fileSize']),
+      category: _asString(json['category']) ?? 'other',
+      uploadedBy: _asInt(json['uploaded_by'] ?? json['uploadedBy']),
+      uploader: json['uploader'] as Map<String, dynamic>?,
+      createdAt: _asDateTime(json['created_at'] ?? json['createdAt']),
+      updatedAt: _asDateTime(json['updatedAt'] ?? json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'society_id': societyId,
+    'title': title,
+    'description': description,
+    'file_url': fileUrl,
+    'file_type': fileType,
+    'file_size': fileSize,
+    'category': category,
+  };
+}
+
+// ─── 9. Society Emergency Contact Model ─────────────────────────────────────
+class SocietyEmergencyContactModel {
+  final int id;
+  final int societyId;
+  final String name;
+  final String? designation;
+  final String phone;
+  final String? altPhone;
+  final String category; // 'security', 'medical', 'police', 'fire', 'plumber', 'electrician', 'management', 'other'
+  final int? createdBy;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  const SocietyEmergencyContactModel({
+    required this.id,
+    required this.societyId,
+    required this.name,
+    this.designation,
+    required this.phone,
+    this.altPhone,
+    this.category = 'other',
+    this.createdBy,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  String get categoryDisplayName {
+    switch (category) {
+      case 'security':
+        return 'Security Guard';
+      case 'medical':
+        return 'Ambulance / Medical';
+      case 'police':
+        return 'Police Station';
+      case 'fire':
+        return 'Fire Station';
+      case 'plumber':
+        return 'Plumber';
+      case 'electrician':
+        return 'Electrician';
+      case 'management':
+        return 'Society Office / Manager';
+      default:
+        return 'Emergency Contact';
+    }
+  }
+
+  factory SocietyEmergencyContactModel.fromJson(Map<String, dynamic> json) {
+    return SocietyEmergencyContactModel(
+      id: _asInt(json['id']) ?? 0,
+      societyId: _asInt(json['society_id'] ?? json['societyId']) ?? 0,
+      name: _asString(json['name']) ?? '',
+      designation: _asString(json['designation']),
+      phone: _asString(json['phone']) ?? '',
+      altPhone: _asString(json['alt_phone'] ?? json['altPhone']),
+      category: _asString(json['category']) ?? 'other',
+      createdBy: _asInt(json['created_by'] ?? json['createdBy']),
+      createdAt: _asDateTime(json['created_at'] ?? json['createdAt']),
+      updatedAt: _asDateTime(json['updatedAt'] ?? json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'society_id': societyId,
+    'name': name,
+    'designation': designation,
+    'phone': phone,
+    'alt_phone': altPhone,
+    'category': category,
   };
 }

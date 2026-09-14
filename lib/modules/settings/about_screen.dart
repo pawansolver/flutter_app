@@ -34,25 +34,30 @@ class AboutScreen extends StatelessWidget {
           children: [
             const SizedBox(height: 32),
             Container(
-              width: 100,
-              height: 100,
+              width: 110,
+              height: 110,
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: const Color(0xFFE5E7EB)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              child: const Center(
-                child: Icon(
-                  Icons.location_city_rounded,
-                  color: Color(0xFF10B981),
-                  size: 50,
+              child: Image.asset(
+                'assets/images/logosmartgali.png',
+                fit: BoxFit.contain,
+                errorBuilder: (ctx, err, stack) => const Center(
+                  child: Icon(
+                    Icons.location_city_rounded,
+                    color: Color(0xFF10B981),
+                    size: 50,
+                  ),
                 ),
               ),
             ),
@@ -67,7 +72,7 @@ class AboutScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Version 1.0.0',
+              'Version 1.0.12',
               style: TextStyle(
                 color: Color(0xFF6B7280),
                 fontSize: 14,

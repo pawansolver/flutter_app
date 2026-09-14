@@ -9,16 +9,26 @@ class NotificationCard extends StatelessWidget {
   final AppNotification notification;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
+  final VoidCallback? onToggleRead;
+  final VoidCallback? onLongPress;
   final VoidCallback? onAcceptInvitation;
   final VoidCallback? onDeclineInvitation;
+  final bool isSelectionMode;
+  final bool isSelected;
+  final ValueChanged<bool?>? onSelectChanged;
 
   const NotificationCard({
     super.key,
     required this.notification,
     required this.onTap,
     this.onDelete,
+    this.onToggleRead,
+    this.onLongPress,
     this.onAcceptInvitation,
     this.onDeclineInvitation,
+    this.isSelectionMode = false,
+    this.isSelected = false,
+    this.onSelectChanged,
   });
 
   static const Color _orange = Color(0xFFFF6B00);
@@ -32,15 +42,41 @@ class NotificationCard extends StatelessWidget {
     final thumbnailUrl = _extractThumbnailUrl(notification.data);
     final isRead = notification.isRead;
 
+    Color bgColor = Colors.white;
+    if (isSelected) {
+      bgColor = const Color(0xFFFFF7ED);
+    } else if (!isRead) {
+      bgColor = const Color(0xFFFFFBF7);
+    }
+
     Widget cardContent = Container(
-      color: isRead ? Colors.white : const Color(0xFFFFFBF7),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      color: bgColor,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Selection Checkbox (if in selection mode) ────────────────────
+          if (isSelectionMode) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 6, right: 8),
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: isSelected,
+                  activeColor: _orange,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  onChanged: onSelectChanged,
+                ),
+              ),
+            ),
+          ],
+
           // ── Left: Avatar or Type Icon Badge ──────────────────────────────
           _buildLeadingVisual(visuals, avatarUrl),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
 
           // ── Center: Title, Message, Timestamp, Action Buttons ───────────
           Expanded(
@@ -164,30 +200,82 @@ class NotificationCard extends StatelessWidget {
             ),
           ),
 
-          // ── Right: Optional Thumbnail or Unread Dot ─────────────────────
+          // ── Right: Thumbnail, Unread Dot, 3-dots Menu ──────────────────
           if (thumbnailUrl != null) ...[
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image.network(
                 thumbnailUrl,
-                width: 46,
-                height: 46,
+                width: 44,
+                height: 44,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
               ),
             ),
           ],
-          if (!isRead) ...[
-            const SizedBox(width: 8),
+          if (!isRead && !isSelectionMode) ...[
+            const SizedBox(width: 6),
             Container(
-              margin: const EdgeInsets.only(top: 4),
-              width: 9,
-              height: 9,
+              margin: const EdgeInsets.only(top: 6),
+              width: 8,
+              height: 8,
               decoration: const BoxDecoration(
                 color: _orange,
                 shape: BoxShape.circle,
               ),
+            ),
+          ],
+          if (!isSelectionMode) ...[
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, size: 18, color: _grey),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              onSelected: (action) {
+                if (action == 'toggle_read' && onToggleRead != null) {
+                  onToggleRead!();
+                } else if (action == 'delete' && onDelete != null) {
+                  onDelete!();
+                }
+              },
+              itemBuilder: (ctx) => [
+                PopupMenuItem(
+                  value: 'toggle_read',
+                  child: Row(
+                    children: [
+                      Icon(
+                        isRead
+                            ? Icons.mark_email_unread_outlined
+                            : Icons.mark_email_read_outlined,
+                        size: 18,
+                        color: _dark,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        isRead ? 'Mark as unread' : 'Mark as read',
+                        style: const TextStyle(fontSize: 13, color: _dark),
+                      ),
+                    ],
+                  ),
+                ),
+                if (onDelete != null)
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: const [
+                        Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                        SizedBox(width: 10),
+                        Text(
+                          'Delete',
+                          style: TextStyle(fontSize: 13, color: Colors.redAccent),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
           ],
         ],
@@ -195,11 +283,14 @@ class NotificationCard extends StatelessWidget {
     );
 
     Widget tapWrapper = InkWell(
-      onTap: onTap,
+      onTap: isSelectionMode
+          ? () => onSelectChanged?.call(!isSelected)
+          : onTap,
+      onLongPress: onLongPress,
       child: cardContent,
     );
 
-    if (onDelete != null) {
+    if (onDelete != null && !isSelectionMode) {
       return Dismissible(
         key: ValueKey('notif_${notification.id}'),
         direction: DismissDirection.endToStart,

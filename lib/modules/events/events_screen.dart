@@ -6,9 +6,17 @@ import '../../services/event_service.dart';
 import '../../widgets/custom_drawer.dart';
 import 'widgets/create_event_sheet.dart';
 import 'widgets/event_card.dart';
+import 'event_invitations_screen.dart';
 
 class EventsScreen extends StatefulWidget {
-  const EventsScreen({super.key});
+  final int? societyId;
+  final String? societyName;
+
+  const EventsScreen({
+    super.key,
+    this.societyId,
+    this.societyName,
+  });
 
   @override
   State<EventsScreen> createState() => _EventsScreenState();
@@ -122,6 +130,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
     try {
       final res = await _eventService.getUpcomingEvents(
         categoryId: _selectedCategoryId,
+        societyId: widget.societyId,
         search: _searchController.text.trim(),
         cursor: cursor,
         limit: 15,
@@ -292,6 +301,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
   void _openCreateSheet() {
     CreateEventSheet.show(
       context,
+      societyId: widget.societyId,
       onEventCreated: (newEvent) {
         setState(() {
           _upcomingEvents.insert(0, newEvent);
@@ -305,30 +315,46 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      drawer: const CustomDrawer(),
+      drawer: widget.societyId != null ? null : const CustomDrawer(),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'Events',
-          style: TextStyle(
+        leading: widget.societyId != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
+        title: Text(
+          widget.societyId != null ? '${widget.societyName ?? "Society"} Events' : 'Events',
+          style: const TextStyle(
             color: Color(0xFF111827),
             fontWeight: FontWeight.w800,
-            fontSize: 22,
+            fontSize: 20,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: Color(0xFF2563EB), size: 28),
+            icon: const Icon(Icons.mail_outline, color: Color(0xFFF18D38), size: 26),
+            tooltip: 'Event Invitations',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const EventInvitationsScreen()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline, color: Color(0xFFF18D38), size: 28),
             tooltip: 'Create Event',
             onPressed: _openCreateSheet,
           ),
         ],
         bottom: TabBar(
           controller: _tabController,
-          labelColor: const Color(0xFF2563EB),
+          labelColor: const Color(0xFFF18D38),
           unselectedLabelColor: const Color(0xFF6B7280),
-          indicatorColor: const Color(0xFF2563EB),
+          indicatorColor: const Color(0xFFF18D38),
           indicatorWeight: 3,
           labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
           tabs: const [
@@ -340,7 +366,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateSheet,
-        backgroundColor: const Color(0xFF2563EB),
+        backgroundColor: const Color(0xFFF18D38),
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: const Text('Create Event', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -423,15 +449,15 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
         label: Text(label),
         selected: isSelected,
         onSelected: (_) => _onCategorySelected(id),
-        selectedColor: const Color(0xFFEFF6FF),
+        selectedColor: const Color(0xFFFFF4EC),
         backgroundColor: const Color(0xFFF3F4F6),
         labelStyle: TextStyle(
           fontSize: 12,
           fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-          color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF4B5563),
+          color: isSelected ? const Color(0xFFF18D38) : const Color(0xFF4B5563),
         ),
         side: BorderSide(
-          color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+          color: isSelected ? const Color(0xFFF18D38) : const Color(0xFFE5E7EB),
         ),
       ),
     );
@@ -439,7 +465,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
 
   Widget _buildUpcomingTab() {
     if (_isLoadingUpcoming) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator(color: Color(0xFFF18D38)));
     }
 
     if (_upcomingEvents.isEmpty) {
@@ -453,6 +479,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
     }
 
     return RefreshIndicator(
+      color: const Color(0xFFF18D38),
       onRefresh: () => _loadUpcoming(refresh: true),
       child: ListView.builder(
         controller: _scrollController,
@@ -462,7 +489,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
           if (index == _upcomingEvents.length) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator(color: Color(0xFFF18D38))),
             );
           }
           return EventCard(event: _upcomingEvents[index]);
@@ -477,7 +504,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(),
+            CircularProgressIndicator(color: Color(0xFFF18D38)),
             SizedBox(height: 12),
             Text('Finding events near you...', style: TextStyle(color: Color(0xFF6B7280))),
           ],
@@ -496,6 +523,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
     }
 
     return RefreshIndicator(
+      color: const Color(0xFFF18D38),
       onRefresh: () => _loadNearby(refresh: true),
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
@@ -504,7 +532,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
           if (index == _nearbyEvents.length) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator(color: Color(0xFFF18D38))),
             );
           }
           return EventCard(event: _nearbyEvents[index]);
@@ -515,7 +543,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
 
   Widget _buildMyRsvpsTab() {
     if (_isLoadingRsvps) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator(color: Color(0xFFF18D38)));
     }
 
     if (_errorMessage != null && _myRsvps.isEmpty) {
@@ -539,6 +567,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
     }
 
     return RefreshIndicator(
+      color: const Color(0xFFF18D38),
       onRefresh: () => _loadMyRsvps(refresh: true),
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
@@ -547,7 +576,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
           if (index == _myRsvps.length) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator(color: Color(0xFFF18D38))),
             );
           }
           return EventCard(event: _myRsvps[index]);
@@ -572,10 +601,10 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
             Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
-                color: Color(0xFFEFF6FF),
+                color: Color(0xFFFFF4EC),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 48, color: const Color(0xFF2563EB)),
+              child: Icon(icon, size: 48, color: const Color(0xFFF18D38)),
             ),
             const SizedBox(height: 16),
             Text(
@@ -596,7 +625,7 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
             ElevatedButton(
               onPressed: onAction,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
+                backgroundColor: const Color(0xFFF18D38),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

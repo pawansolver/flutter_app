@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../models/event_model.dart';
 import '../../services/event_service.dart';
 
@@ -146,9 +146,9 @@ class _EventParticipantsScreenState extends State<EventParticipantsScreen>
         ),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: const Color(0xFF2563EB),
+          labelColor: const Color(0xFFF18D38),
           unselectedLabelColor: const Color(0xFF6B7280),
-          indicatorColor: const Color(0xFF2563EB),
+          indicatorColor: const Color(0xFFF18D38),
           indicatorWeight: 3,
           labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
           tabs: [
@@ -176,7 +176,7 @@ class _EventParticipantsScreenState extends State<EventParticipantsScreen>
     VoidCallback onRefresh,
   ) {
     if (isLoading && list.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)));
+      return const Center(child: CircularProgressIndicator(color: Color(0xFFF18D38)));
     }
     if (list.isEmpty) {
       return Center(
@@ -192,7 +192,7 @@ class _EventParticipantsScreenState extends State<EventParticipantsScreen>
     }
     return RefreshIndicator(
       onRefresh: () async => onRefresh(),
-      color: const Color(0xFF2563EB),
+      color: const Color(0xFFF18D38),
       child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -201,7 +201,7 @@ class _EventParticipantsScreenState extends State<EventParticipantsScreen>
           if (index == list.length) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator(color: Color(0xFF2563EB))),
+              child: Center(child: CircularProgressIndicator(color: Color(0xFFF18D38))),
             );
           }
           return _buildParticipantTile(list[index]);
@@ -230,10 +230,10 @@ class _EventParticipantsScreenState extends State<EventParticipantsScreen>
           // Avatar
           CircleAvatar(
             radius: 22,
-            backgroundColor: const Color(0xFFEFF6FF),
+            backgroundColor: const Color(0xFFFFF4EC),
             backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
             child: avatarUrl == null
-                ? Text(initial, style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF2563EB), fontSize: 16))
+                ? Text(initial, style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFF18D38), fontSize: 16))
                 : null,
           ),
           const SizedBox(width: 14),
@@ -284,7 +284,7 @@ class _EventParticipantsScreenState extends State<EventParticipantsScreen>
               onPressed: () => _loadGoing(refresh: true),
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF18D38), foregroundColor: Colors.white),
             ),
           ],
         ),

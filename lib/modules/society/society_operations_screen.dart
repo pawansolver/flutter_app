@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../dashboard/main_dashboard.dart';
+import 'complaint_detail_screen.dart';
 import '../../services/society_service.dart';
+import '../../services/auth_session.dart';
 import '../../models/society_models.dart';
 
 class SocietyOperationsScreen extends StatefulWidget {
@@ -23,6 +25,9 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
   final SocietyService _societyService = SocietyService();
 
   int? _resolvedSocietyId;
+  String _userRole = 'resident';
+  int? _currentUserId;
+  String? _myFlatNo;
 
   // Complaints State
   bool _isLoadingComplaints = true;
@@ -53,6 +58,32 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
     _resolvedSocietyId = await _societyService.resolveActiveSocietyId(widget.societyId);
 
     if (_resolvedSocietyId != null) {
+      try {
+        _currentUserId = await AuthSessionStore().readUserId();
+        if (_currentUserId != null) {
+          final soc = await _societyService.getSocietyDetail(_resolvedSocietyId!);
+          if (soc.userId == _currentUserId || soc.createdBy == _currentUserId) {
+            _userRole = 'admin';
+          } else {
+            final membersRes = await _societyService.getMembers(_resolvedSocietyId!, limit: 100);
+            final me = membersRes.data.firstWhere(
+              (m) => m.userId == _currentUserId,
+              orElse: () => const SocietyMemberModel(
+                id: 0,
+                societyId: 0,
+                userId: 0,
+                role: 'resident',
+                status: 'active',
+              ),
+            );
+            if (me.id > 0) {
+              _userRole = me.role.toLowerCase();
+              _myFlatNo = me.flatNo;
+            }
+          }
+        }
+      } catch (_) {}
+
       _loadComplaints();
       _loadVisitors();
       _loadPolls();
@@ -250,88 +281,102 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
                               final c = _complaints[index];
                               final isOpen = c.isOpen;
                               final isResolved = c.isResolved;
-                              return Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            c.title,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 15,
-                                              color: Color(0xFF111827),
+                              return InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ComplaintDetailScreen(
+                                        complaint: c,
+                                        userRole: _userRole,
+                                      ),
+                                    ),
+                                  ).then((_) => _loadComplaints());
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              c.title,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                                color: Color(0xFF111827),
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: isResolved
-                                                ? const Color(0xFF10B981).withValues(alpha: 0.1)
-                                                : isOpen
-                                                    ? const Color(0xFFFF6B00).withValues(alpha: 0.1)
-                                                    : Colors.blue.withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(20),
-                                          ),
-                                          child: Text(
-                                            c.status.toUpperCase(),
-                                            style: TextStyle(
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
                                               color: isResolved
-                                                  ? const Color(0xFF10B981)
+                                                  ? const Color(0xFF10B981).withValues(alpha: 0.1)
                                                   : isOpen
-                                                      ? const Color(0xFFFF6B00)
-                                                      : Colors.blue,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
+                                                      ? const Color(0xFFFF6B00).withValues(alpha: 0.1)
+                                                      : Colors.blue.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(20),
+                                            ),
+                                            child: Text(
+                                              c.status.toUpperCase(),
+                                              style: TextStyle(
+                                                color: isResolved
+                                                    ? const Color(0xFF10B981)
+                                                    : isOpen
+                                                        ? const Color(0xFFFF6B00)
+                                                        : Colors.blue,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      c.description,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFF3F4F6),
-                                            borderRadius: BorderRadius.circular(6),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        c.description,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF3F4F6),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              c.category.toUpperCase(),
+                                              style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w600),
+                                            ),
                                           ),
-                                          child: Text(
-                                            c.category.toUpperCase(),
-                                            style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w600),
+                                          const Spacer(),
+                                          const Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            c.createdAt != null
+                                                ? '${c.createdAt!.day}/${c.createdAt!.month}/${c.createdAt!.year}'
+                                                : '',
+                                            style: const TextStyle(color: Colors.grey, fontSize: 12),
                                           ),
-                                        ),
-                                        const Spacer(),
-                                        const Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          c.createdAt != null
-                                              ? '${c.createdAt!.day}/${c.createdAt!.month}/${c.createdAt!.year}'
-                                              : '',
-                                          style: const TextStyle(color: Colors.grey, fontSize: 12),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               );
                             },
@@ -395,6 +440,7 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
                   onPressed: isSubmitting
                       ? null
                       : () async {
+                          final messenger = ScaffoldMessenger.of(context);
                           final title = titleController.text.trim();
                           final desc = descController.text.trim();
                           final cat = categoryController.text.trim().toLowerCase();
@@ -428,7 +474,7 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
                             if (ctx.mounted) Navigator.pop(ctx);
                             _loadComplaints();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              messenger.showSnackBar(
                                 const SnackBar(
                                   content: Text('Complaint submitted successfully!'),
                                   backgroundColor: Color(0xFF10B981),
@@ -529,6 +575,12 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
                                       ? const Color(0xFF10B981)
                                       : Colors.grey;
 
+                              final canManageVisitor = _userRole == 'admin' ||
+                                  _userRole == 'security' ||
+                                  _userRole == 'committee' ||
+                                  (v.userId != null && v.userId == _currentUserId) ||
+                                  (_myFlatNo != null && v.flatNo != null && _myFlatNo!.toLowerCase() == v.flatNo!.toLowerCase());
+
                               return Container(
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
@@ -590,7 +642,7 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
                                         ),
                                       ],
                                     ),
-                                    if (atGate) ...[
+                                    if (atGate && canManageVisitor) ...[
                                       const SizedBox(height: 14),
                                       const Divider(height: 1, color: Color(0xFFE5E7EB)),
                                       const SizedBox(height: 12),
@@ -705,6 +757,7 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
                   onPressed: isSubmitting
                       ? null
                       : () async {
+                          final messenger = ScaffoldMessenger.of(context);
                           final name = nameController.text.trim();
                           if (name.isEmpty) return;
 
@@ -736,7 +789,7 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
                             if (ctx.mounted) Navigator.pop(ctx);
                             _loadVisitors();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              messenger.showSnackBar(
                                 const SnackBar(
                                   content: Text('Gate pass generated successfully!'),
                                   backgroundColor: Color(0xFF10B981),

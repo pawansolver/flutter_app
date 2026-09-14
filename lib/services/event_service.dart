@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' as dart_io;
 
 import 'package:dio/dio.dart';
@@ -92,6 +93,7 @@ class EventService {
     int? categoryId,
     String? eventType,
     int? communityId,
+    int? societyId,
     String? search,
     String? cursor,
     int limit = 20,
@@ -103,6 +105,7 @@ class EventService {
         if (categoryId != null) 'category_id': categoryId,
         if (eventType != null && eventType.isNotEmpty) 'event_type': eventType,
         if (communityId != null) 'community_id': communityId,
+        if (societyId != null) 'society_id': societyId,
         if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
         if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
       };
@@ -267,12 +270,13 @@ class EventService {
     }
   }
 
-  /// Create Event (with optional cover image upload)
+  /// Create Event (with optional cover image upload & sub-events)
   Future<EventModel> createEvent({
     required String title,
     String? description,
     int? categoryId,
     int? communityId,
+    int? societyId,
     String eventType = 'offline',
     String visibility = 'public',
     required DateTime startAt,
@@ -283,21 +287,28 @@ class EventService {
     double? latitude,
     double? longitude,
     int? maxParticipants,
+    String? speakerOrHost,
+    bool isRegistrationRequired = false,
+    List<SubEventModel>? subEvents,
     dart_io.File? coverImageFile,
   }) async {
     try {
       final options = await _authOptions();
 
       dynamic requestData;
+      final hasSubEventImages = subEvents != null &&
+          subEvents.any((s) => s.localImagePath != null && s.localImagePath!.isNotEmpty);
+
       // MultipartFile.fromFile is NOT available on Flutter Web.
       // On web, always use JSON body. On native, use multipart when a file is provided.
-      if (coverImageFile != null && !kIsWeb) {
+      if ((coverImageFile != null || hasSubEventImages) && !kIsWeb) {
         final formData = FormData();
         formData.fields.addAll([
           MapEntry('title', title),
           if (description != null && description.isNotEmpty) MapEntry('description', description),
           if (categoryId != null) MapEntry('category_id', categoryId.toString()),
           if (communityId != null) MapEntry('community_id', communityId.toString()),
+          if (societyId != null) MapEntry('society_id', societyId.toString()),
           MapEntry('event_type', eventType),
           MapEntry('visibility', visibility),
           MapEntry('start_at', startAt.toUtc().toIso8601String()),
@@ -308,18 +319,43 @@ class EventService {
           if (latitude != null) MapEntry('latitude', latitude.toString()),
           if (longitude != null) MapEntry('longitude', longitude.toString()),
           if (maxParticipants != null) MapEntry('max_participants', maxParticipants.toString()),
+          if (speakerOrHost != null && speakerOrHost.isNotEmpty) MapEntry('speaker_or_host', speakerOrHost),
+          MapEntry('is_registration_required', isRegistrationRequired.toString()),
+          if (subEvents != null && subEvents.isNotEmpty)
+            MapEntry('sub_events', jsonEncode(subEvents.map((s) => s.toJson()).toList())),
         ]);
 
-        final pathSegments = coverImageFile.path.split(RegExp(r'[/\\]'));
-        final fileName = pathSegments.isNotEmpty && pathSegments.last.trim().isNotEmpty
-            ? pathSegments.last.trim()
-            : 'cover_image.jpg';
-        formData.files.add(
-          MapEntry(
-            'cover_image',
-            await MultipartFile.fromFile(coverImageFile.path, filename: fileName),
-          ),
-        );
+        if (coverImageFile != null) {
+          final pathSegments = coverImageFile.path.split(RegExp(r'[/\\]'));
+          final fileName = pathSegments.isNotEmpty && pathSegments.last.trim().isNotEmpty
+              ? pathSegments.last.trim()
+              : 'cover_image.jpg';
+          formData.files.add(
+            MapEntry(
+              'cover_image',
+              await MultipartFile.fromFile(coverImageFile.path, filename: fileName),
+            ),
+          );
+        }
+
+        if (subEvents != null) {
+          for (int i = 0; i < subEvents.length; i++) {
+            final localPath = subEvents[i].localImagePath;
+            if (localPath != null && localPath.isNotEmpty) {
+              final subFile = dart_io.File(localPath);
+              if (await subFile.exists()) {
+                final subFileName = subFile.path.split(RegExp(r'[/\\]')).last;
+                formData.files.add(
+                  MapEntry(
+                    'sub_event_cover_$i',
+                    await MultipartFile.fromFile(subFile.path, filename: subFileName),
+                  ),
+                );
+              }
+            }
+          }
+        }
+
         requestData = formData;
       } else {
         requestData = {
@@ -327,6 +363,7 @@ class EventService {
           if (description != null && description.isNotEmpty) 'description': description,
           if (categoryId != null) 'category_id': categoryId,
           if (communityId != null) 'community_id': communityId,
+          if (societyId != null) 'society_id': societyId,
           'event_type': eventType,
           'visibility': visibility,
           'start_at': startAt.toUtc().toIso8601String(),
@@ -337,6 +374,10 @@ class EventService {
           if (latitude != null) 'latitude': latitude,
           if (longitude != null) 'longitude': longitude,
           if (maxParticipants != null) 'max_participants': maxParticipants,
+          if (speakerOrHost != null && speakerOrHost.isNotEmpty) 'speaker_or_host': speakerOrHost,
+          'is_registration_required': isRegistrationRequired,
+          if (subEvents != null && subEvents.isNotEmpty)
+            'sub_events': subEvents.map((s) => s.toJson()).toList(),
         };
       }
 
@@ -351,6 +392,28 @@ class EventService {
       return EventModel.fromJson(data);
     } on DioException catch (e) {
       throw _formatDioError(e, 'Failed to create event.');
+    } catch (e) {
+      throw EventServiceException(e.toString());
+    }
+  }
+
+  /// Bulk Create Events (Enterprise Feature)
+  Future<List<EventModel>> bulkCreateEvents(List<Map<String, dynamic>> eventsList) async {
+    try {
+      final options = await _authOptions();
+      final response = await _dio.post(
+        ApiConfig.bulkEvents,
+        data: {'events': eventsList},
+        options: options,
+      );
+      final body = response.data;
+      final rawList = body['data'] is List ? body['data'] as List : [];
+      return rawList
+          .whereType<Map<String, dynamic>>()
+          .map((item) => EventModel.fromJson(item))
+          .toList();
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to bulk create events.');
     } catch (e) {
       throw EventServiceException(e.toString());
     }
@@ -425,13 +488,17 @@ class EventService {
     double? latitude,
     double? longitude,
     int? maxParticipants,
+    List<SubEventModel>? subEvents,
     dart_io.File? coverImageFile,
   }) async {
     try {
       final options = await _authOptions();
       dynamic requestData;
 
-      if (coverImageFile != null && !kIsWeb) {
+      final hasSubEventImages = subEvents != null &&
+          subEvents.any((s) => s.localImagePath != null && s.localImagePath!.isNotEmpty);
+
+      if ((coverImageFile != null || hasSubEventImages) && !kIsWeb) {
         final formData = FormData();
         if (title != null && title.isNotEmpty) formData.fields.add(MapEntry('title', title));
         if (description != null) formData.fields.add(MapEntry('description', description));
@@ -444,13 +511,37 @@ class EventService {
         if (locationName != null) formData.fields.add(MapEntry('location_name', locationName));
         if (address != null) formData.fields.add(MapEntry('address', address));
         if (maxParticipants != null) formData.fields.add(MapEntry('max_participants', maxParticipants.toString()));
+        if (subEvents != null) {
+          formData.fields.add(MapEntry('sub_events', jsonEncode(subEvents.map((s) => s.toJson()).toList())));
+        }
 
-        final parts = coverImageFile.path.split(RegExp(r'[/\\]'));
-        final fileName = parts.isNotEmpty && parts.last.trim().isNotEmpty ? parts.last.trim() : 'cover_image.jpg';
-        formData.files.add(MapEntry(
-          'cover_image',
-          await MultipartFile.fromFile(coverImageFile.path, filename: fileName),
-        ));
+        if (coverImageFile != null) {
+          final parts = coverImageFile.path.split(RegExp(r'[/\\]'));
+          final fileName = parts.isNotEmpty && parts.last.trim().isNotEmpty ? parts.last.trim() : 'cover_image.jpg';
+          formData.files.add(MapEntry(
+            'cover_image',
+            await MultipartFile.fromFile(coverImageFile.path, filename: fileName),
+          ));
+        }
+
+        if (subEvents != null) {
+          for (int i = 0; i < subEvents.length; i++) {
+            final localPath = subEvents[i].localImagePath;
+            if (localPath != null && localPath.isNotEmpty) {
+              final subFile = dart_io.File(localPath);
+              if (await subFile.exists()) {
+                final subFileName = subFile.path.split(RegExp(r'[/\\]')).last;
+                formData.files.add(
+                  MapEntry(
+                    'sub_event_cover_$i',
+                    await MultipartFile.fromFile(subFile.path, filename: subFileName),
+                  ),
+                );
+              }
+            }
+          }
+        }
+
         requestData = formData;
       } else {
         requestData = {
@@ -467,6 +558,7 @@ class EventService {
           if (latitude != null) 'latitude': latitude,
           if (longitude != null) 'longitude': longitude,
           if (maxParticipants != null) 'max_participants': maxParticipants,
+          if (subEvents != null) 'sub_events': subEvents.map((s) => s.toJson()).toList(),
         };
       }
 
@@ -558,6 +650,126 @@ class EventService {
       return (participants: participants, nextCursor: nextCursor, hasMore: hasMore);
     } on DioException catch (e) {
       throw _formatDioError(e, 'Failed to load participants.');
+    } catch (e) {
+      throw EventServiceException(e.toString());
+    }
+  }
+
+  // ─── Event Invitations APIs (PRD 7.4) ──────────────────────────────────────
+  /// Send Event Invitations to selected users
+  Future<List<EventInvitationModel>> sendInvitations(int eventId, List<int> userIds) async {
+    try {
+      final options = await _authOptions();
+      final response = await _dio.post(
+        ApiConfig.sendEventInvitations(eventId),
+        data: {
+          'user_ids': userIds,
+          'userIds': userIds,
+          'eventId': eventId,
+        },
+        options: options,
+      );
+
+      final body = response.data;
+      final dynamic rawData = body['data'];
+      final List<dynamic> rawList = rawData is List
+          ? rawData
+          : (rawData is Map ? (rawData['invitations'] ?? rawData['items'] ?? []) : (body['invitations'] ?? []));
+      return rawList
+          .whereType<Map<String, dynamic>>()
+          .map((item) => EventInvitationModel.fromJson(item))
+          .toList();
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to send invitations.');
+    } catch (e) {
+      throw EventServiceException(e.toString());
+    }
+  }
+
+  /// Fetch Received Event Invitations
+  Future<({List<EventInvitationModel> invitations, int total, int page})> getMyInvitations({
+    String? status,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    try {
+      final options = await _authOptions();
+      final query = <String, dynamic>{
+        'page': page,
+        'limit': limit,
+        if (status != null && status.isNotEmpty && status != 'all') 'status': status,
+      };
+
+      final response = await _dio.get(
+        ApiConfig.eventInvitations,
+        queryParameters: query,
+        options: options,
+      );
+
+      final body = response.data;
+      final dynamic rawData = body['data'];
+      List<dynamic> rawList = [];
+      if (rawData is List) {
+        rawList = rawData;
+      } else if (rawData is Map<String, dynamic>) {
+        rawList = (rawData['invitations'] ?? rawData['items'] ?? rawData['rows'] ?? []) as List<dynamic>;
+      } else if (body['invitations'] is List) {
+        rawList = body['invitations'] as List<dynamic>;
+      }
+
+      final invitations = rawList
+          .whereType<Map<String, dynamic>>()
+          .map((item) => EventInvitationModel.fromJson(item))
+          .toList();
+
+      final total = (rawData is Map ? _asInt(rawData['total']) : null) ??
+          _asInt(body['meta']?['total']) ??
+          _asInt(body['total']) ??
+          invitations.length;
+
+      return (invitations: invitations, total: total, page: page);
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to load invitations.');
+    } catch (e) {
+      throw EventServiceException(e.toString());
+    }
+  }
+
+  /// Respond to an Event Invitation (accept or decline)
+  Future<EventInvitationModel> respondToInvitation(int invitationId, {required bool accept}) async {
+    try {
+      final options = await _authOptions();
+      final response = await _dio.put(
+        ApiConfig.eventInvitationRespond(invitationId),
+        data: {'status': accept ? 'accepted' : 'declined'},
+        options: options,
+      );
+
+      final body = response.data;
+      final data = body['data'] is Map<String, dynamic> ? body['data'] : body;
+      return EventInvitationModel.fromJson(data);
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to respond to invitation.');
+    } catch (e) {
+      throw EventServiceException(e.toString());
+    }
+  }
+
+  // ─── Event Chat Lifecycle (PRD 7.4 / Phase 6) ─────────────────────────────
+  /// Get or create the dedicated event discussion chat
+  Future<Map<String, dynamic>> getOrCreateEventChat(int eventId) async {
+    try {
+      final options = await _authOptions();
+      final response = await _dio.post(
+        ApiConfig.eventChat(eventId),
+        options: options,
+      );
+
+      final body = response.data;
+      final data = body['data'] is Map<String, dynamic> ? body['data'] : body;
+      return Map<String, dynamic>.from(data);
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to open event chat.');
     } catch (e) {
       throw EventServiceException(e.toString());
     }

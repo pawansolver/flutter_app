@@ -5,14 +5,25 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../services/community_service.dart';
 import '../../services/service_marketplace_service.dart';
+import '../../services/society_service.dart';
 import '../chat/chat_window_screen.dart';
 import '../community/community_detail_screen.dart';
 import '../events/event_detail_screen.dart';
+import '../events/event_invitations_screen.dart';
+import '../events/events_screen.dart';
+import '../feed/home_screen.dart' as feed_home;
+import '../feed/post_detail_screen.dart';
 import '../profile/user_profile_screen.dart';
 import '../services/screens/booking_detail_screen.dart';
+import '../services/screens/my_service_bookings_screen.dart';
 import '../services/screens/provider_booking_detail_screen.dart';
+import '../services/screens/provider_bookings_screen.dart';
 import '../services/screens/provider_reviews_screen.dart';
+import '../society/announcements_screen.dart';
+import '../society/complaint_detail_screen.dart';
+import '../society/parking_screen.dart';
 import '../society/society_dashboard_screen.dart';
+import '../society/society_emergency_contacts_screen.dart';
 import '../society/society_operations_screen.dart';
 import 'notification_service.dart';
 import 'widgets/notification_card.dart';
@@ -42,8 +53,13 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   bool _isLoadingMore = false;
   bool _isMarkingAll = false;
   bool _isClearingRead = false;
+  bool _isDeletingAll = false;
   String? _error;
   int _unreadCount = 0;
+
+  // Multi-Selection Mode
+  bool _isSelectionMode = false;
+  final Set<int> _selectedIds = {};
 
   // Pagination
   int _currentPage = 1;
@@ -225,10 +241,135 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     });
   }
 
+  // ── Multi-Selection Mode Actions ───────────────────────────────────────────
+
+  void _enterSelectionMode(int initialId) {
+    setState(() {
+      _isSelectionMode = true;
+      _selectedIds.clear();
+      _selectedIds.add(initialId);
+    });
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _isSelectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _toggleSelectAll() {
+    final visible = _filtered;
+    setState(() {
+      if (_selectedIds.length == visible.length) {
+        _selectedIds.clear();
+      } else {
+        _selectedIds.clear();
+        _selectedIds.addAll(visible.map((n) => n.id));
+      }
+    });
+  }
+
+  Future<void> _deleteSelectedNotifications() async {
+    if (_selectedIds.isEmpty) return;
+
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Delete Selected',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        content: Text(
+          'Delete $count selected notification${count > 1 ? 's' : ''}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: _grey)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final idsToDelete = _selectedIds.toList();
+    setState(() {
+      for (final id in idsToDelete) {
+        final notif = _all.firstWhere((n) => n.id == id, orElse: () => _all.first);
+        if (!notif.isRead && _unreadCount > 0) _unreadCount -= 1;
+      }
+      _all.removeWhere((n) => _selectedIds.contains(n.id));
+      _exitSelectionMode();
+    });
+
+    final result = await _service.bulkDeleteNotifications(
+      idsToDelete,
+      deletedRemarks: 'User deleted selected notifications',
+    );
+    if (!mounted) return;
+
+    if (result.isSuccess) {
+      _showSnack('Deleted $count notifications.', isSuccess: true);
+    } else {
+      _loadNotifications();
+      _showSnack(result.error ?? 'Failed to delete selected notifications.');
+    }
+  }
+
+  Future<void> _markSelectedAsRead() async {
+    if (_selectedIds.isEmpty) return;
+
+    final unreadSelected = _all.where((n) => _selectedIds.contains(n.id) && !n.isRead).toList();
+    if (unreadSelected.isEmpty) {
+      _exitSelectionMode();
+      _showSnack('Selected notifications are already read.');
+      return;
+    }
+
+    setState(() {
+      for (var i = 0; i < _all.length; i++) {
+        if (_selectedIds.contains(_all[i].id) && !_all[i].isRead) {
+          _all[i] = _all[i].copyWith(isRead: true);
+        }
+      }
+      _unreadCount = (_unreadCount - unreadSelected.length).clamp(0, 999999);
+      _exitSelectionMode();
+    });
+
+    for (final notif in unreadSelected) {
+      unawaited(_service.markRead(notif.id));
+    }
+
+    _showSnack('Marked ${unreadSelected.length} notification(s) as read.', isSuccess: true);
+  }
+
   // ── Notification Actions ───────────────────────────────────────────────
 
   /// Tap: mark single notification as read (optimistic update) and navigate.
   Future<void> _onTapNotification(AppNotification notif) async {
+    if (_isSelectionMode) {
+      setState(() {
+        if (_selectedIds.contains(notif.id)) {
+          _selectedIds.remove(notif.id);
+        } else {
+          _selectedIds.add(notif.id);
+        }
+      });
+      return;
+    }
+
     if (!notif.isRead) {
       final index = _all.indexWhere((n) => n.id == notif.id);
       if (index != -1) {
@@ -253,7 +394,45 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     await _handleDeepLink(notif);
   }
 
-  /// Swipe-to-dismiss: delete single notification (optimistic).
+  /// Toggle read/unread status on a single notification
+  Future<void> _toggleReadStatus(AppNotification notif) async {
+    final index = _all.indexWhere((n) => n.id == notif.id);
+    if (index == -1) return;
+
+    final newRead = !notif.isRead;
+    setState(() {
+      _all[index] = notif.copyWith(isRead: newRead);
+      if (newRead) {
+        if (_unreadCount > 0) _unreadCount -= 1;
+      } else {
+        _unreadCount += 1;
+      }
+    });
+
+    final result = newRead
+        ? await _service.markRead(notif.id)
+        : await _service.markUnread(notif.id);
+
+    if (!mounted) return;
+    if (!result.isSuccess) {
+      setState(() {
+        _all[index] = notif;
+        if (newRead) {
+          _unreadCount += 1;
+        } else {
+          if (_unreadCount > 0) _unreadCount -= 1;
+        }
+      });
+      _showSnack(result.error ?? 'Failed to update notification');
+    } else {
+      _showSnack(
+        newRead ? 'Marked as read.' : 'Marked as unread.',
+        isSuccess: true,
+      );
+    }
+  }
+
+  /// Delete single notification with immediate optimistic UI and Undo snackbar.
   Future<void> _deleteNotification(AppNotification notif) async {
     final index = _all.indexWhere((n) => n.id == notif.id);
     if (index == -1) return;
@@ -263,14 +442,40 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       if (!notif.isRead && _unreadCount > 0) _unreadCount -= 1;
     });
 
-    final result = await _service.deleteNotification(notif.id);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Notification deleted.'),
+        backgroundColor: _dark,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        action: SnackBarAction(
+          label: 'Undo',
+          textColor: _orange,
+          onPressed: () {
+            setState(() {
+              _all.insert(index, notif);
+              if (!notif.isRead) _unreadCount += 1;
+            });
+          },
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+
+    final result = await _service.deleteNotification(
+      notif.id,
+      deletedRemarks: 'User deleted notification',
+    );
     if (!mounted) return;
     if (!result.isSuccess) {
-      setState(() {
-        _all.insert(index, notif);
-        if (!notif.isRead) _unreadCount += 1;
-      });
-      _showSnack(result.error ?? 'Could not delete notification.');
+      if (!_all.any((n) => n.id == notif.id)) {
+        setState(() {
+          _all.insert(index, notif);
+          if (!notif.isRead) _unreadCount += 1;
+        });
+        _showSnack(result.error ?? 'Could not delete notification.');
+      }
     }
   }
 
@@ -296,6 +501,63 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     } else {
       setState(() => _isMarkingAll = false);
       _showSnack(result.error ?? 'Failed to mark all as read.');
+    }
+  }
+
+  /// Delete all notifications in feed with confirmation.
+  Future<void> _deleteAllNotifications() async {
+    if (_all.isEmpty || _isDeletingAll) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Delete All Notifications',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        content: Text(
+          'Delete all ${_all.length} notification${_all.length > 1 ? 's' : ''}? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: _grey)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeletingAll = true);
+    final allIds = _all.map((n) => n.id).toList();
+    final result = await _service.bulkDeleteNotifications(
+      allIds,
+      deletedRemarks: 'User deleted all notifications',
+    );
+    if (!mounted) return;
+
+    if (result.isSuccess) {
+      setState(() {
+        _all.clear();
+        _unreadCount = 0;
+        _isDeletingAll = false;
+        _isSelectionMode = false;
+        _selectedIds.clear();
+      });
+      _showSnack('All notifications deleted.', isSuccess: true);
+    } else {
+      setState(() => _isDeletingAll = false);
+      _showSnack(result.error ?? 'Failed to delete notifications.');
     }
   }
 
@@ -408,12 +670,15 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           if (chatId != null && chatId > 0) {
             final userId = await AuthService().getUserId();
             if (!mounted) return;
+            final chatName = (data['chatName']?.toString().isNotEmpty == true)
+                ? data['chatName'].toString()
+                : (notif.title.isNotEmpty ? notif.title : 'Chat');
             await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => ChatWindowScreen(
                   chatId: chatId,
-                  chatName: data['chatName']?.toString() ?? 'Chat',
+                  chatName: chatName,
                   currentUserId: userId ?? 0,
                   isOnline: false,
                 ),
@@ -423,24 +688,41 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           }
           break;
 
-        // 2. Community Update / Announcement
+        // 2. Community Update / Announcement / Join Request
         case 'community':
           final communityId = int.tryParse(data['communityId']?.toString() ?? '');
           if (communityId != null && communityId > 0) {
-            final community = await CommunityService().getCommunityDetails(communityId);
-            if (!mounted) return;
+            try {
+              final community = await CommunityService().getCommunityDetails(communityId);
+              if (!mounted) return;
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CommunityDetailScreen(community: community),
+                ),
+              );
+              return;
+            } catch (_) {
+              if (!mounted) return;
+              _showSnack('Unable to load community details.');
+              return;
+            }
+          }
+          break;
+
+        // 3. Event Reminder / New Event / Event Invitation
+        case 'event':
+        case 'event_invitation':
+          final t = notif.type.toLowerCase();
+          if (t.contains('invitation') || target == 'event_invitation' || data['invitationId'] != null) {
             await Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => CommunityDetailScreen(community: community),
+                builder: (_) => const EventInvitationsScreen(),
               ),
             );
             return;
           }
-          break;
-
-        // 3. Event Reminder / New Event
-        case 'event':
           final eventId = int.tryParse(data['eventId']?.toString() ?? '');
           if (eventId != null && eventId > 0) {
             await Navigator.push(
@@ -450,8 +732,15 @@ class _NotificationsScreenState extends State<NotificationsScreen>
               ),
             );
             return;
+          } else {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const EventsScreen(),
+              ),
+            );
+            return;
           }
-          break;
 
         // 4. Follow Request / Profile
         case 'profile':
@@ -477,37 +766,52 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         // 5. Service Bookings (Provider & Customer)
         case 'booking':
           final bookingId = int.tryParse(data['bookingId']?.toString() ?? '');
+          final isProvider = data['isProvider'] == true ||
+              notif.type.toLowerCase().contains('request') ||
+              notif.type.toLowerCase().contains('provider') ||
+              notif.title.toLowerCase().contains('request');
+
           if (bookingId != null && bookingId > 0) {
-            final booking = await ServiceMarketplaceService().getBookingById(bookingId);
-            if (!mounted) return;
+            try {
+              final booking = await ServiceMarketplaceService().getBookingById(bookingId);
+              if (!mounted) return;
 
-            if (booking == null) {
-              _showSnack('This booking is no longer available.');
-              return;
+              if (booking != null) {
+                if (isProvider) {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProviderBookingDetailScreen(booking: booking),
+                    ),
+                  );
+                } else {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => BookingDetailScreen(booking: booking),
+                    ),
+                  );
+                }
+                return;
+              }
+            } catch (_) {
+              // Fallback to bookings screen
             }
-
-            final isProvider = data['isProvider'] == true ||
-                notif.type.toLowerCase().contains('request') ||
-                notif.type.toLowerCase().contains('provider');
-
-            if (isProvider) {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ProviderBookingDetailScreen(booking: booking),
-                ),
-              );
-            } else {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BookingDetailScreen(booking: booking),
-                ),
-              );
-            }
-            return;
           }
-          break;
+
+          if (!mounted) return;
+          if (isProvider) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProviderBookingsScreen()),
+            );
+          } else {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MyServiceBookingsScreen()),
+            );
+          }
+          return;
 
         // 6. Service Reviews
         case 'review':
@@ -519,48 +823,135 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           );
           return;
 
-        // 7. Society Operations (Complaints, Visitors, Notices)
+        // 7. Society Complaints
+        case 'society_complaint':
+          final societyId = int.tryParse(data['societyId']?.toString() ?? '');
+          final complaintId = int.tryParse(data['complaintId']?.toString() ?? '');
+          if (complaintId != null && complaintId > 0) {
+            try {
+              final complaint = await SocietyService().getComplaint(complaintId, societyId ?? 0);
+              if (!mounted) return;
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ComplaintDetailScreen(
+                    complaint: complaint,
+                    userRole: 'resident',
+                  ),
+                ),
+              );
+              return;
+            } catch (_) {
+              // Fallback to operations complaints tab
+            }
+          }
+          if (!mounted) return;
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SocietyOperationsScreen(
+                initialTab: 0,
+                societyId: societyId,
+              ),
+            ),
+          );
+          return;
+
+        // 8. Society Visitors
+        case 'society_visitor':
+          final societyId = int.tryParse(data['societyId']?.toString() ?? '');
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SocietyOperationsScreen(
+                initialTab: 1,
+                societyId: societyId,
+              ),
+            ),
+          );
+          return;
+
+        // 9. Society Polls
+        case 'society_poll':
+          final societyId = int.tryParse(data['societyId']?.toString() ?? '');
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SocietyOperationsScreen(
+                initialTab: 2,
+                societyId: societyId,
+              ),
+            ),
+          );
+          return;
+
+        // 10. Society Announcements
+        case 'society_announcement':
+          final societyId = int.tryParse(data['societyId']?.toString() ?? '');
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AnnouncementsScreen(societyId: societyId),
+            ),
+          );
+          return;
+
+        // 11. Society Parking
+        case 'society_parking':
+          final societyId = int.tryParse(data['societyId']?.toString() ?? '');
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ParkingScreen(societyId: societyId),
+            ),
+          );
+          return;
+
+        // 12. Society Emergency
+        case 'society_emergency':
+          final societyId = int.tryParse(data['societyId']?.toString() ?? '');
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SocietyEmergencyContactsScreen(
+                societyId: societyId ?? 0,
+                userRole: 'resident',
+              ),
+            ),
+          );
+          return;
+
+        // 13. General Society Dashboard
         case 'society':
           final societyId = int.tryParse(data['societyId']?.toString() ?? '');
-          final t = notif.type.toLowerCase();
-          if (t.contains('complaint')) {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => SocietyOperationsScreen(
-                  initialTab: 0,
-                  societyId: societyId,
-                ),
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SocietyDashboardScreen(
+                initialSocietyId: societyId,
               ),
-            );
-            return;
-          } else if (t.contains('visitor')) {
+            ),
+          );
+          return;
+
+        // 14. Posts (Like / Comment)
+        case 'post':
+          final postId = int.tryParse(data['postId']?.toString() ?? '');
+          if (postId != null && postId > 0) {
             await Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => SocietyOperationsScreen(
-                  initialTab: 1,
-                  societyId: societyId,
-                ),
-              ),
-            );
-            return;
-          } else {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => SocietyDashboardScreen(
-                  initialSocietyId: societyId,
-                ),
+                builder: (_) => PostDetailScreen(postId: postId),
               ),
             );
             return;
           }
-
-        // 8. Like / Comment on Post
-        case 'post':
-          final postId = data['postId']?.toString();
-          _showPostInfoSheet(notif, postId);
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const feed_home.HomeScreen(),
+            ),
+          );
           return;
 
         default:
@@ -568,7 +959,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       }
     } catch (e) {
       if (mounted) {
-        _showSnack('This content is no longer available or could not be loaded.');
+        _showSnack('This content could not be opened.');
       }
       return;
     }
@@ -577,88 +968,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     if (notif.message.isNotEmpty && mounted) {
       _showSnack('${notif.title}: ${notif.message}', isSuccess: true);
     }
-  }
-
-  void _showPostInfoSheet(AppNotification notif, String? postId) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      backgroundColor: Colors.white,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: const Color(0xFFF43F5E).withValues(alpha: 0.15),
-                    child: const Icon(
-                      Icons.favorite_rounded,
-                      color: Color(0xFFF43F5E),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          notif.title,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: _dark,
-                          ),
-                        ),
-                        if (postId != null)
-                          Text(
-                            'Post #$postId',
-                            style: const TextStyle(fontSize: 12, color: _grey),
-                          ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: _grey),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(
-                notif.message,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF374151),
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _dark,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Close'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   void _showSnack(String msg, {bool isSuccess = false}) {
@@ -682,7 +991,52 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
     return Scaffold(
       backgroundColor: _bgColor,
-      appBar: _buildAppBar(readCount),
+      appBar: _isSelectionMode
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.close, color: _dark),
+                onPressed: _exitSelectionMode,
+              ),
+              title: Text(
+                '${_selectedIds.length} selected',
+                style: const TextStyle(
+                  color: _dark,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: _selectedIds.length == _filtered.length ? 'Deselect all' : 'Select all',
+                  icon: Icon(
+                    _selectedIds.length == _filtered.length
+                        ? Icons.deselect_rounded
+                        : Icons.select_all_rounded,
+                    color: _dark,
+                  ),
+                  onPressed: _toggleSelectAll,
+                ),
+                if (_selectedIds.isNotEmpty) ...[
+                  IconButton(
+                    tooltip: 'Mark as read',
+                    icon: const Icon(Icons.mark_email_read_outlined, color: _dark),
+                    onPressed: _markSelectedAsRead,
+                  ),
+                  IconButton(
+                    tooltip: 'Delete',
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                    onPressed: _deleteSelectedNotifications,
+                  ),
+                ],
+              ],
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(1.0),
+                child: Container(color: _divider, height: 1.0),
+              ),
+            )
+          : _buildAppBar(readCount),
       body: Column(
         children: [
           _buildTabBar(),
@@ -731,7 +1085,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         ],
       ),
       actions: [
-        if (_isMarkingAll || _isClearingRead)
+        if (_isMarkingAll || _isClearingRead || _isDeletingAll)
           const Padding(
             padding: EdgeInsets.only(right: 16),
             child: Center(
@@ -758,24 +1112,67 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           icon: const Icon(Icons.more_vert, color: _dark),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           onSelected: (value) {
-            if (value == 'clear_read') _clearReadNotifications();
+            if (value == 'select_mode') {
+              setState(() {
+                _isSelectionMode = true;
+                _selectedIds.clear();
+              });
+            } else if (value == 'clear_read') {
+              _clearReadNotifications();
+            } else if (value == 'delete_all') {
+              _deleteAllNotifications();
+            }
           },
           itemBuilder: (_) => [
+            if (_filtered.isNotEmpty)
+              const PopupMenuItem(
+                value: 'select_mode',
+                child: Row(
+                  children: [
+                    Icon(Icons.checklist_rounded, size: 20, color: _dark),
+                    SizedBox(width: 10),
+                    Text(
+                      'Select notifications',
+                      style: TextStyle(color: _dark),
+                    ),
+                  ],
+                ),
+              ),
             PopupMenuItem(
               value: 'clear_read',
               enabled: readCount > 0,
               child: Row(
                 children: [
                   Icon(
-                    Icons.delete_sweep_outlined,
+                    Icons.cleaning_services_outlined,
                     size: 20,
-                    color: readCount > 0 ? Colors.redAccent : _grey,
+                    color: readCount > 0 ? _orange : _grey,
                   ),
                   const SizedBox(width: 10),
                   Text(
                     'Clear read ($readCount)',
                     style: TextStyle(
-                      color: readCount > 0 ? Colors.redAccent : _grey,
+                      color: readCount > 0 ? _dark : _grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'delete_all',
+              enabled: _all.isNotEmpty,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.delete_forever_outlined,
+                    size: 20,
+                    color: _all.isNotEmpty ? Colors.redAccent : _grey,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Delete all (${_all.length})',
+                    style: TextStyle(
+                      color: _all.isNotEmpty ? Colors.redAccent : _grey,
                     ),
                   ),
                 ],
@@ -930,7 +1327,24 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             final notif = items[index];
             return NotificationCard(
               notification: notif,
+              isSelectionMode: _isSelectionMode,
+              isSelected: _selectedIds.contains(notif.id),
+              onSelectChanged: (val) {
+                setState(() {
+                  if (val == true) {
+                    _selectedIds.add(notif.id);
+                  } else {
+                    _selectedIds.remove(notif.id);
+                  }
+                });
+              },
               onTap: () => _onTapNotification(notif),
+              onLongPress: () {
+                if (!_isSelectionMode) {
+                  _enterSelectionMode(notif.id);
+                }
+              },
+              onToggleRead: () => _toggleReadStatus(notif),
               onDelete: () => _deleteNotification(notif),
               onAcceptInvitation: notif.data?['invitationId'] != null
                   ? () => _respondToCommunityInvitation(notif, 'accept')
