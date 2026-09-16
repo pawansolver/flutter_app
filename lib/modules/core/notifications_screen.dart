@@ -888,10 +888,14 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         // 10. Society Announcements
         case 'society_announcement':
           final societyId = int.tryParse(data['societyId']?.toString() ?? '');
+          final announcementId = int.tryParse(data['announcementId']?.toString() ?? '');
           await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => AnnouncementsScreen(societyId: societyId),
+              builder: (_) => AnnouncementsScreen(
+                societyId: societyId,
+                initialAnnouncementId: announcementId,
+              ),
             ),
           );
           return;

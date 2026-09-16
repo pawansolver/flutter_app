@@ -304,8 +304,14 @@ class ApiConfig {
 
   // Society Announcements
   static String get societyAnnouncements => "$baseUrl/society-announcement";
+  static String get societyAnnouncementUpload =>
+      "$baseUrl/society-announcement/upload-attachment";
+  static String societyAnnouncementArchive(int id) =>
+      "$baseUrl/society-announcement/$id/archive";
   static String societyAnnouncement(int id) =>
       "$baseUrl/society-announcement/$id";
+  static String get societyAnnouncementBulkDelete =>
+      "$baseUrl/society-announcement/bulk-delete";
 
   // Society Complaints
   static String get societyComplaints => "$baseUrl/society-complaint";
@@ -314,6 +320,11 @@ class ApiConfig {
       "$baseUrl/society-complaint/$id/status";
   static String assignSocietyComplaint(int id) =>
       "$baseUrl/society-complaint/$id/assign";
+
+  // Complaint Masters
+  static String get complaintCategories => "$baseUrl/complaint-categories";
+  static String get complaintSubCategories => "$baseUrl/complaint-sub-categories";
+  static String get complaintLocationTypes => "$baseUrl/complaint-location-types";
 
   // Society Facilities
   static String get societyFacilities => "$baseUrl/society-facility";

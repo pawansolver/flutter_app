@@ -33,6 +33,29 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
   bool _isLoadingComplaints = true;
   List<SocietyComplaintModel> _complaints = [];
   String _complaintFilter = 'all';
+  SocietyComplaintSummaryModel? _complaintSummary;
+  final TextEditingController _complaintSearchController = TextEditingController();
+  String _complaintSearchQuery = '';
+
+  // Advanced Filters
+  String? _complaintCategoryFilter;
+  String? _complaintPriorityFilter;
+  String? _complaintLocationTypeFilter;
+  String _complaintAssignedFilter = 'all'; // 'all', 'assigned', 'unassigned'
+
+  bool get _isManagementUser =>
+      _userRole.toLowerCase() == 'admin' ||
+      _userRole.toLowerCase() == 'committee' ||
+      _userRole.toLowerCase() == 'owner';
+
+  int get _activeFiltersCount {
+    int count = 0;
+    if (_complaintCategoryFilter != null) count++;
+    if (_complaintPriorityFilter != null) count++;
+    if (_complaintLocationTypeFilter != null) count++;
+    if (_complaintAssignedFilter != 'all') count++;
+    return count;
+  }
 
   // Visitors State
   bool _isLoadingVisitors = true;
@@ -102,14 +125,34 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
     if (_resolvedSocietyId == null) return;
     setState(() => _isLoadingComplaints = true);
     try {
-      final res = await _societyService.getComplaints(
+      final query = _complaintSearchQuery.trim();
+      final assignedParam = (_complaintAssignedFilter == 'assigned')
+          ? 'assigned'
+          : (_complaintAssignedFilter == 'unassigned')
+              ? 'unassigned'
+              : null;
+
+      final complaintsFuture = _societyService.getComplaints(
         _resolvedSocietyId!,
         status: _complaintFilter == 'all' ? null : _complaintFilter,
+        category: _complaintCategoryFilter,
+        priority: _complaintPriorityFilter,
+        locationType: _complaintLocationTypeFilter,
+        assigned: assignedParam,
+        search: query.isEmpty ? null : query,
         limit: 50,
       );
+
+      final summaryFuture = _societyService.getComplaintSummary(_resolvedSocietyId!);
+
+      final results = await Future.wait([complaintsFuture, summaryFuture]);
+      final complaintsRes = results[0] as SocietyPaginatedResponse<SocietyComplaintModel>;
+      final summaryRes = results[1] as SocietyComplaintSummaryModel;
+
       if (mounted) {
         setState(() {
-          _complaints = res.data;
+          _complaints = complaintsRes.data;
+          _complaintSummary = summaryRes;
           _isLoadingComplaints = false;
         });
       }
@@ -157,6 +200,7 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _complaintSearchController.dispose();
     super.dispose();
   }
 
@@ -235,33 +279,19 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
       ),
       body: Column(
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              children: [
-                _filterChip('All', 'all', _complaintFilter, (val) {
-                  setState(() => _complaintFilter = val);
-                  _loadComplaints();
-                }),
-                const SizedBox(width: 8),
-                _filterChip('Open', 'open', _complaintFilter, (val) {
-                  setState(() => _complaintFilter = val);
-                  _loadComplaints();
-                }),
-                const SizedBox(width: 8),
-                _filterChip('In Progress', 'in_progress', _complaintFilter, (val) {
-                  setState(() => _complaintFilter = val);
-                  _loadComplaints();
-                }),
-                const SizedBox(width: 8),
-                _filterChip('Resolved', 'resolved', _complaintFilter, (val) {
-                  setState(() => _complaintFilter = val);
-                  _loadComplaints();
-                }),
-              ],
-            ),
-          ),
+          // 1. Summary Metric Cards for Admin/Committee (Section 3)
+          if (_isManagementUser) ...[
+            _buildSummaryMetricsCarousel(),
+            const SizedBox(height: 6),
+          ],
+
+          // 2. Search & Filter Bar (Section 4 & 5)
+          _buildComplaintSearchBar(),
+
+          // 3. Status Filter Chips (Section 5)
+          _buildComplaintStatusChips(),
+
+          // 4. Complaints List / Cards (Section 6)
           Expanded(
             child: _isLoadingComplaints
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF6B00)))
@@ -269,116 +299,14 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
                     color: const Color(0xFFFF6B00),
                     onRefresh: _loadComplaints,
                     child: _complaints.isEmpty
-                        ? const Center(
-                            child: Text('No complaints found',
-                                style: TextStyle(color: Color(0xFF6B7280), fontSize: 14)),
-                          )
+                        ? _buildEmptyComplaintsState()
                         : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
                             itemCount: _complaints.length,
                             separatorBuilder: (context, index) => const SizedBox(height: 12),
                             itemBuilder: (context, index) {
                               final c = _complaints[index];
-                              final isOpen = c.isOpen;
-                              final isResolved = c.isResolved;
-                              return InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ComplaintDetailScreen(
-                                        complaint: c,
-                                        userRole: _userRole,
-                                      ),
-                                    ),
-                                  ).then((_) => _loadComplaints());
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              c.title,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15,
-                                                color: Color(0xFF111827),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: isResolved
-                                                  ? const Color(0xFF10B981).withValues(alpha: 0.1)
-                                                  : isOpen
-                                                      ? const Color(0xFFFF6B00).withValues(alpha: 0.1)
-                                                      : Colors.blue.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(20),
-                                            ),
-                                            child: Text(
-                                              c.status.toUpperCase(),
-                                              style: TextStyle(
-                                                color: isResolved
-                                                    ? const Color(0xFF10B981)
-                                                    : isOpen
-                                                        ? const Color(0xFFFF6B00)
-                                                        : Colors.blue,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        c.description,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFF3F4F6),
-                                              borderRadius: BorderRadius.circular(6),
-                                            ),
-                                            child: Text(
-                                              c.category.toUpperCase(),
-                                              style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w600),
-                                            ),
-                                          ),
-                                          const Spacer(),
-                                          const Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            c.createdAt != null
-                                                ? '${c.createdAt!.day}/${c.createdAt!.month}/${c.createdAt!.year}'
-                                                : '',
-                                            style: const TextStyle(color: Colors.grey, fontSize: 12),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
+                              return _buildComplaintCard(c);
                             },
                           ),
                   ),
@@ -386,6 +314,813 @@ class _SocietyOperationsScreenState extends State<SocietyOperationsScreen>
         ],
       ),
     );
+  }
+
+  // ─── Summary Metric Cards Carousel (Real Backend Data) ─────────────────────
+  Widget _buildSummaryMetricsCarousel() {
+    final s = _complaintSummary;
+    final totalCount = s?.total ?? _complaints.length;
+    final openCount = s?.open ?? 0;
+    final assignedCount = s?.assigned ?? 0;
+    final inProgressCount = s?.inProgress ?? 0;
+    final resolvedCount = s?.resolved ?? 0;
+    final closedCount = s?.closed ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.only(top: 8, bottom: 2),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            _buildSummaryMetricCard('Total', totalCount, 'all', const Color(0xFF111827), Icons.format_list_bulleted),
+            const SizedBox(width: 8),
+            _buildSummaryMetricCard('Open', openCount, 'open', const Color(0xFF2563EB), Icons.pending_actions),
+            const SizedBox(width: 8),
+            _buildSummaryMetricCard('Assigned', assignedCount, 'assigned', const Color(0xFF8B5CF6), Icons.person_pin_circle_outlined),
+            const SizedBox(width: 8),
+            _buildSummaryMetricCard('In Progress', inProgressCount, 'in_progress', const Color(0xFF0284C7), Icons.play_circle_outline),
+            const SizedBox(width: 8),
+            _buildSummaryMetricCard('Resolved', resolvedCount, 'resolved', const Color(0xFF10B981), Icons.task_alt),
+            const SizedBox(width: 8),
+            _buildSummaryMetricCard('Closed', closedCount, 'closed', const Color(0xFF64748B), Icons.lock_outline),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryMetricCard(String label, int count, String statusFilter, Color color, IconData icon) {
+    final isSelected = _complaintFilter == statusFilter;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () {
+        setState(() {
+          _complaintFilter = statusFilter;
+        });
+        _loadComplaints();
+      },
+      child: Container(
+        width: 106,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? color : const Color(0xFFE5E7EB),
+            width: isSelected ? 2.0 : 1.0,
+          ),
+          boxShadow: isSelected
+              ? [BoxShadow(color: color.withValues(alpha: 0.15), blurRadius: 6, offset: const Offset(0, 2))]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(icon, size: 16, color: color),
+                Text(
+                  count.toString(),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                color: isSelected ? color : const Color(0xFF6B7280),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Search Bar with Filter Trigger ────────────────────────────────────────
+  Widget _buildComplaintSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFD1D5DB)),
+              ),
+              child: TextField(
+                controller: _complaintSearchController,
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF111827)),
+                decoration: InputDecoration(
+                  hintText: 'Search #ticket, flat, title, resident...',
+                  hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+                  prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF6B7280)),
+                  suffixIcon: _complaintSearchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18, color: Color(0xFF6B7280)),
+                          onPressed: () {
+                            _complaintSearchController.clear();
+                            setState(() {
+                              _complaintSearchQuery = '';
+                            });
+                            _loadComplaints();
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+                onSubmitted: (val) {
+                  setState(() {
+                    _complaintSearchQuery = val;
+                  });
+                  _loadComplaints();
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Filter Button
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: _showComplaintFilterModal,
+            child: Container(
+              height: 44,
+              width: 44,
+              decoration: BoxDecoration(
+                color: _activeFiltersCount > 0 ? const Color(0xFF111827) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _activeFiltersCount > 0 ? const Color(0xFF111827) : const Color(0xFFD1D5DB),
+                ),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    Icons.tune,
+                    size: 20,
+                    color: _activeFiltersCount > 0 ? Colors.white : const Color(0xFF4B5563),
+                  ),
+                  if (_activeFiltersCount > 0)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFF6B00),
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                        child: Text(
+                          '$_activeFiltersCount',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Status Filter Chips Row ───────────────────────────────────────────────
+  Widget _buildComplaintStatusChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          _filterChip('All', 'all', _complaintFilter, (val) {
+            setState(() => _complaintFilter = val);
+            _loadComplaints();
+          }),
+          const SizedBox(width: 8),
+          _filterChip('Open', 'open', _complaintFilter, (val) {
+            setState(() => _complaintFilter = val);
+            _loadComplaints();
+          }),
+          const SizedBox(width: 8),
+          _filterChip('Assigned', 'assigned', _complaintFilter, (val) {
+            setState(() => _complaintFilter = val);
+            _loadComplaints();
+          }),
+          const SizedBox(width: 8),
+          _filterChip('In Progress', 'in_progress', _complaintFilter, (val) {
+            setState(() => _complaintFilter = val);
+            _loadComplaints();
+          }),
+          const SizedBox(width: 8),
+          _filterChip('Resolved', 'resolved', _complaintFilter, (val) {
+            setState(() => _complaintFilter = val);
+            _loadComplaints();
+          }),
+          const SizedBox(width: 8),
+          _filterChip('Closed', 'closed', _complaintFilter, (val) {
+            setState(() => _complaintFilter = val);
+            _loadComplaints();
+          }),
+          if (_activeFiltersCount > 0) ...[
+            const SizedBox(width: 8),
+            ActionChip(
+              avatar: const Icon(Icons.close, size: 14, color: Color(0xFFDC2626)),
+              label: Text('Reset Filters ($_activeFiltersCount)', style: const TextStyle(fontSize: 11, color: Color(0xFFDC2626))),
+              backgroundColor: const Color(0xFFFEE2E2),
+              side: const BorderSide(color: Color(0xFFFCA5A5)),
+              onPressed: () {
+                setState(() {
+                  _complaintCategoryFilter = null;
+                  _complaintPriorityFilter = null;
+                  _complaintLocationTypeFilter = null;
+                  _complaintAssignedFilter = 'all';
+                });
+                _loadComplaints();
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── Empty State ───────────────────────────────────────────────────────────
+  Widget _buildEmptyComplaintsState() {
+    final isFiltered = _complaintFilter != 'all' || _complaintSearchQuery.isNotEmpty || _activeFiltersCount > 0;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isFiltered ? Icons.search_off : Icons.inbox_outlined,
+              size: 48,
+              color: const Color(0xFF9CA3AF),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isFiltered ? 'No matching complaints found' : 'No complaints reported in society',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF374151)),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              isFiltered
+                  ? 'Try modifying your search query, status, or applied filters.'
+                  : 'Residents can raise complaints whenever an issue arises.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+            if (isFiltered) ...[
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF111827),
+                  side: const BorderSide(color: Color(0xFF111827)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  setState(() {
+                    _complaintFilter = 'all';
+                    _complaintSearchQuery = '';
+                    _complaintSearchController.clear();
+                    _complaintCategoryFilter = null;
+                    _complaintPriorityFilter = null;
+                    _complaintLocationTypeFilter = null;
+                    _complaintAssignedFilter = 'all';
+                  });
+                  _loadComplaints();
+                },
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Reset All Filters'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Rich Complaint Card (Section 6) ───────────────────────────────────────
+  Widget _buildComplaintCard(SocietyComplaintModel c) {
+    final statusColor = _getStatusColor(c.status);
+    final priorityColor = _getPriorityColor(c.priority);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ComplaintDetailScreen(
+              complaint: c,
+              userRole: _userRole,
+            ),
+          ),
+        ).then((_) => _loadComplaints());
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Row 1: Ticket # + Badges (Status, Priority, Reopened)
+            Row(
+              children: [
+                Text(
+                  c.ticketNumber,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    color: Color(0xFF111827),
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                const Spacer(),
+                if (c.isReopened) ...[
+                  Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEE2E2),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFFEF4444)),
+                    ),
+                    child: const Text(
+                      'REOPENED',
+                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                    ),
+                  ),
+                ],
+                // Priority Chip
+                Container(
+                  margin: const EdgeInsets.only(right: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: priorityColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    c.priority.toUpperCase(),
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: priorityColor),
+                  ),
+                ),
+                // Status Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    c.status.replaceAll('_', ' ').toUpperCase(),
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Row 2: Complaint Title
+            Text(
+              c.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                color: Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 4),
+
+            // Row 3: Description Snippet
+            Text(
+              c.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13, height: 1.3),
+            ),
+            const SizedBox(height: 10),
+
+            // Row 4: Resident & Location Info
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.person_outline, size: 14, color: Color(0xFF4B5563)),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      c.raisedByName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('•', style: TextStyle(color: Color(0xFFD1D5DB))),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.home_outlined, size: 14, color: Color(0xFF4B5563)),
+                  const SizedBox(width: 4),
+                  Text(
+                    c.residentFlatDisplay,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
+                  ),
+                  if (c.locationTypeDisplay.isNotEmpty && c.locationType != 'my_flat') ...[
+                    const SizedBox(width: 8),
+                    const Text('•', style: TextStyle(color: Color(0xFFD1D5DB))),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        c.locationTypeDisplay,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Row 5: Metadata & Assignment Footer
+            Row(
+              children: [
+                // Category Tag
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(_getCategoryIcon(c.category), size: 12, color: const Color(0xFF4B5563)),
+                      const SizedBox(width: 4),
+                      Text(
+                        c.category.toUpperCase(),
+                        style: const TextStyle(color: Color(0xFF4B5563), fontSize: 10, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Assignee Tag
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: c.hasAssignee ? const Color(0xFFEFF6FF) : const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: c.hasAssignee ? const Color(0xFFBFDBFE) : const Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        c.hasAssignee ? Icons.engineering : Icons.person_search_outlined,
+                        size: 12,
+                        color: c.hasAssignee ? const Color(0xFF2563EB) : const Color(0xFF6B7280),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        c.hasAssignee ? c.assigneeDisplay : 'Unassigned',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: c.hasAssignee ? const Color(0xFF1D4ED8) : const Color(0xFF6B7280),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                // Date
+                const Icon(Icons.schedule, size: 12, color: Color(0xFF9CA3AF)),
+                const SizedBox(width: 4),
+                Text(
+                  c.createdAt != null
+                      ? '${c.createdAt!.day.toString().padLeft(2, '0')}/${c.createdAt!.month.toString().padLeft(2, '0')}/${c.createdAt!.year}'
+                      : '',
+                  style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Filter Bottom Sheet Modal (Section 5) ─────────────────────────────────
+  void _showComplaintFilterModal() {
+    String? tempCategory = _complaintCategoryFilter;
+    String? tempPriority = _complaintPriorityFilter;
+    String? tempLocation = _complaintLocationTypeFilter;
+    String tempAssigned = _complaintAssignedFilter;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setFilterState) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Filter Complaints',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        setFilterState(() {
+                          tempCategory = null;
+                          tempPriority = null;
+                          tempLocation = null;
+                          tempAssigned = 'all';
+                        });
+                      },
+                      child: const Text('Reset', style: TextStyle(color: Color(0xFFDC2626))),
+                    ),
+                  ],
+                ),
+                const Divider(height: 16),
+
+                // Assignment Filter
+                const Text('Staff Assignment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF374151))),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('All'),
+                      selected: tempAssigned == 'all',
+                      onSelected: (_) => setFilterState(() => tempAssigned = 'all'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Assigned'),
+                      selected: tempAssigned == 'assigned',
+                      onSelected: (_) => setFilterState(() => tempAssigned = 'assigned'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Unassigned'),
+                      selected: tempAssigned == 'unassigned',
+                      onSelected: (_) => setFilterState(() => tempAssigned = 'unassigned'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Priority Filter
+                const Text('Priority Level', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF374151))),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('All'),
+                      selected: tempPriority == null,
+                      onSelected: (_) => setFilterState(() => tempPriority = null),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Urgent'),
+                      selected: tempPriority == 'urgent',
+                      onSelected: (_) => setFilterState(() => tempPriority = 'urgent'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('High'),
+                      selected: tempPriority == 'high',
+                      onSelected: (_) => setFilterState(() => tempPriority = 'high'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Medium'),
+                      selected: tempPriority == 'medium',
+                      onSelected: (_) => setFilterState(() => tempPriority = 'medium'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Low'),
+                      selected: tempPriority == 'low',
+                      onSelected: (_) => setFilterState(() => tempPriority = 'low'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Category Filter
+                const Text('Category', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF374151))),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('All'),
+                      selected: tempCategory == null,
+                      onSelected: (_) => setFilterState(() => tempCategory = null),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Plumbing'),
+                      selected: tempCategory == 'plumbing',
+                      onSelected: (_) => setFilterState(() => tempCategory = 'plumbing'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Electrical'),
+                      selected: tempCategory == 'electrical',
+                      onSelected: (_) => setFilterState(() => tempCategory = 'electrical'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Lift'),
+                      selected: tempCategory == 'lift',
+                      onSelected: (_) => setFilterState(() => tempCategory = 'lift'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Security'),
+                      selected: tempCategory == 'security',
+                      onSelected: (_) => setFilterState(() => tempCategory = 'security'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Maintenance'),
+                      selected: tempCategory == 'maintenance',
+                      onSelected: (_) => setFilterState(() => tempCategory = 'maintenance'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('General'),
+                      selected: tempCategory == 'general',
+                      onSelected: (_) => setFilterState(() => tempCategory = 'general'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Location Type Filter
+                const Text('Location Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF374151))),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('All'),
+                      selected: tempLocation == null,
+                      onSelected: (_) => setFilterState(() => tempLocation = null),
+                    ),
+                    ChoiceChip(
+                      label: const Text('My Flat'),
+                      selected: tempLocation == 'my_flat',
+                      onSelected: (_) => setFilterState(() => tempLocation = 'my_flat'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Other Flat'),
+                      selected: tempLocation == 'other_flat',
+                      onSelected: (_) => setFilterState(() => tempLocation = 'other_flat'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Common Area'),
+                      selected: tempLocation == 'common_area',
+                      onSelected: (_) => setFilterState(() => tempLocation = 'common_area'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Apply Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF111827),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      setState(() {
+                        _complaintCategoryFilter = tempCategory;
+                        _complaintPriorityFilter = tempPriority;
+                        _complaintLocationTypeFilter = tempLocation;
+                        _complaintAssignedFilter = tempAssigned;
+                      });
+                      _loadComplaints();
+                    },
+                    child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'open':
+        return const Color(0xFF2563EB);
+      case 'assigned':
+      case 'in_progress':
+        return const Color(0xFFF59E0B);
+      case 'resolved':
+        return const Color(0xFF10B981);
+      case 'closed':
+        return const Color(0xFF6B7280);
+      default:
+        return const Color(0xFF6B7280);
+    }
+  }
+
+  Color _getPriorityColor(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'urgent':
+      case 'high':
+        return const Color(0xFFEF4444);
+      case 'medium':
+        return const Color(0xFFF59E0B);
+      case 'low':
+        return const Color(0xFF10B981);
+      default:
+        return const Color(0xFF6B7280);
+    }
+  }
+
+  IconData _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'electrical':
+        return Icons.bolt;
+      case 'plumbing':
+        return Icons.plumbing;
+      case 'lift':
+        return Icons.elevator;
+      case 'security':
+        return Icons.shield;
+      case 'maintenance':
+        return Icons.build;
+      case 'general':
+      default:
+        return Icons.assignment;
+    }
   }
 
   void _showNewComplaintModal() {

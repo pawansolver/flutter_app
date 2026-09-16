@@ -110,6 +110,8 @@ class SocietyProfileModel {
     this.userRole,
   });
 
+  String get name => societyName;
+
   factory SocietyProfileModel.fromJson(Map<String, dynamic> json) {
     String? resolvedRole;
     if (json['membership'] is Map) {
@@ -210,64 +212,165 @@ class SocietyMemberModel {
 }
 
 // ─── 3. Society Announcement Model ──────────────────────────────────────────
+class AnnouncementAttachmentModel {
+  final String fileUrl;
+  final String fileName;
+  final String? fileType;
+  final int? fileSize;
+
+  const AnnouncementAttachmentModel({
+    required this.fileUrl,
+    required this.fileName,
+    this.fileType,
+    this.fileSize,
+  });
+
+  bool get isPdf =>
+      fileName.toLowerCase().endsWith('.pdf') || (fileType?.toLowerCase().contains('pdf') ?? false);
+
+  bool get isImage =>
+      fileName.toLowerCase().endsWith('.png') ||
+      fileName.toLowerCase().endsWith('.jpg') ||
+      fileName.toLowerCase().endsWith('.jpeg') ||
+      fileName.toLowerCase().endsWith('.webp') ||
+      (fileType?.toLowerCase().contains('image') ?? false);
+
+  String get formattedSize {
+    if (fileSize == null || fileSize! <= 0) return '';
+    if (fileSize! < 1024) return '$fileSize B';
+    if (fileSize! < 1024 * 1024) return '${(fileSize! / 1024).toStringAsFixed(1)} KB';
+    return '${(fileSize! / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  factory AnnouncementAttachmentModel.fromJson(Map<String, dynamic> json) {
+    return AnnouncementAttachmentModel(
+      fileUrl: _asString(json['file_url'] ?? json['url'] ?? json['fileUrl']) ?? '',
+      fileName: _asString(json['file_name'] ?? json['name'] ?? json['fileName']) ?? 'Attachment',
+      fileType: _asString(json['file_type'] ?? json['type'] ?? json['fileType']),
+      fileSize: _asInt(json['file_size'] ?? json['size'] ?? json['fileSize']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'file_url': fileUrl,
+    'file_name': fileName,
+    if (fileType != null) 'file_type': fileType,
+    if (fileSize != null) 'file_size': fileSize,
+  };
+}
+
 class SocietyAnnouncementModel {
   final int id;
+  final String announcementNumber;
   final int societyId;
   final int? createdBy;
   final String title;
+  final String? summary;
   final String message;
+  final String? actionText;
+  final String audience; // 'entire_society' | 'block' | 'committee'
   final String priority; // 'low' | 'medium' | 'high' | 'urgent'
-  final String category; // 'general' | 'maintenance' | 'security' | 'finance' | 'event'
+  final String category; // 'general' | 'maintenance' | 'security' | 'finance' | 'event' | 'rules_notice' | 'emergency'
   final bool isPinned;
+  final String status; // 'draft' | 'published' | 'archived'
+  final DateTime? publishAt;
+  final DateTime? publishedAt;
   final DateTime? expiresAt;
   final DateTime? createdAt;
+  final List<AnnouncementAttachmentModel> attachments;
   final Map<String, dynamic>? creator;
 
   const SocietyAnnouncementModel({
     required this.id,
+    this.announcementNumber = '',
     required this.societyId,
     this.createdBy,
     required this.title,
+    this.summary,
     required this.message,
+    this.actionText,
+    this.audience = 'entire_society',
     required this.priority,
     required this.category,
     required this.isPinned,
+    this.status = 'published',
+    this.publishAt,
+    this.publishedAt,
     this.expiresAt,
     this.createdAt,
+    this.attachments = const [],
     this.creator,
   });
 
   bool get isUrgent =>
       priority.toLowerCase() == 'urgent' || priority.toLowerCase() == 'high';
 
+  bool get isDraft => status.toLowerCase() == 'draft';
+  bool get isPublished => status.toLowerCase() == 'published';
+  bool get isArchived => status.toLowerCase() == 'archived';
+  bool get hasAttachments => attachments.isNotEmpty;
+
+  DateTime? get effectivePublishedDate => publishedAt ?? createdAt;
+
   String get authorName =>
       _asString(creator?['userName'] ?? creator?['name']) ?? 'Management';
 
   factory SocietyAnnouncementModel.fromJson(Map<String, dynamic> json) {
+    List<AnnouncementAttachmentModel> parsedAttachments = [];
+    dynamic rawAtt = json['attachments'];
+    if (rawAtt is String) {
+      try {
+        rawAtt = jsonDecode(rawAtt);
+      } catch (_) {}
+    }
+    if (rawAtt is List) {
+      for (final a in rawAtt) {
+        if (a is Map) {
+          parsedAttachments.add(AnnouncementAttachmentModel.fromJson(Map<String, dynamic>.from(a)));
+        }
+      }
+    }
+
     return SocietyAnnouncementModel(
       id: _asInt(json['id'] ?? json['announcementId']) ?? 0,
+      announcementNumber: _asString(json['announcement_number'] ?? json['announcementNumber']) ?? '',
       societyId: _asInt(json['society_id'] ?? json['societyId']) ?? 0,
       createdBy: _asInt(json['created_by'] ?? json['createdBy']),
       title: _asString(json['title']) ?? '',
-      message: _asString(json['message'] ?? json['description']) ?? '',
+      summary: _asString(json['summary']),
+      message: _asString(json['message'] ?? json['description'] ?? json['content']) ?? '',
+      actionText: _asString(json['action_text'] ?? json['actionText']),
+      audience: _asString(json['audience']) ?? 'entire_society',
       priority: _asString(json['priority'])?.toLowerCase() ?? 'medium',
       category: _asString(json['category']) ?? 'general',
       isPinned: _asBool(json['is_pinned'] ?? json['isPinned']),
+      status: _asString(json['status'])?.toLowerCase() ?? 'published',
+      publishAt: _asDateTime(json['publish_at'] ?? json['publishAt']),
+      publishedAt: _asDateTime(json['published_at'] ?? json['publishedAt']),
       expiresAt: _asDateTime(json['expires_at'] ?? json['expiresAt']),
       createdAt: _asDateTime(json['created_at'] ?? json['createdAt']),
+      attachments: parsedAttachments,
       creator: json['creator'] as Map<String, dynamic>?,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'id': id,
+    'announcement_number': announcementNumber,
     'society_id': societyId,
     'title': title,
+    if (summary != null) 'summary': summary,
     'message': message,
+    if (actionText != null) 'action_text': actionText,
+    'audience': audience,
     'priority': priority,
     'category': category,
     'is_pinned': isPinned,
-    'expires_at': expiresAt?.toIso8601String(),
+    'status': status,
+    if (publishAt != null) 'publish_at': publishAt!.toIso8601String(),
+    if (publishedAt != null) 'published_at': publishedAt!.toIso8601String(),
+    if (expiresAt != null) 'expires_at': expiresAt!.toIso8601String(),
+    'attachments': attachments.map((a) => a.toJson()).toList(),
   };
 }
 
@@ -279,6 +382,10 @@ class SocietyComplaintModel {
   final String title;
   final String description;
   final String category; // 'electrical' | 'plumbing' | 'security' | 'lift' | 'maintenance' | 'general'
+  final String? subCategory;
+  final String? locationType; // 'my_flat' | 'common_area' | 'parking' | 'lift' | 'garden' | 'clubhouse' | 'other'
+  final String? flatNo;
+  final String? exactLocation;
   final String priority; // 'low' | 'medium' | 'high' | 'urgent'
   final String status; // 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed'
   final int? assignedTo;
@@ -296,6 +403,10 @@ class SocietyComplaintModel {
     required this.title,
     required this.description,
     required this.category,
+    this.subCategory,
+    this.locationType,
+    this.flatNo,
+    this.exactLocation,
     required this.priority,
     required this.status,
     this.assignedTo,
@@ -307,16 +418,71 @@ class SocietyComplaintModel {
     this.assignee,
   });
 
-  bool get isOpen => status.toLowerCase() == 'open' || status.toLowerCase() == 'assigned';
+  String get ticketNumber => '#CMP-${id.toString().padLeft(4, '0')}';
+
+  bool get isOpen => status.toLowerCase() == 'open';
+  bool get isAssigned => status.toLowerCase() == 'assigned';
   bool get isInProgress => status.toLowerCase() == 'in_progress';
   bool get isResolved => status.toLowerCase() == 'resolved';
   bool get isClosed => status.toLowerCase() == 'closed';
+
+  bool get canReopen => isResolved || isClosed;
+  bool get canClose => isResolved;
+
+  bool get hasAssignee => assignedTo != null || assigneeName.isNotEmpty;
+  bool get hasResolution => resolvedAt != null || (remark != null && remark!.trim().isNotEmpty);
 
   String get complainantName =>
       _asString(user?['userName'] ?? user?['name']) ?? 'Resident #$userId';
   String get raisedByName => complainantName;
   String get assigneeName =>
       _asString(assignee?['userName'] ?? assignee?['name']) ?? '';
+  String get assigneeDisplay =>
+      assigneeName.isNotEmpty ? assigneeName : (assignedTo != null ? 'Staff #$assignedTo' : 'Unassigned');
+  String get assigneePhone =>
+      _asString(assignee?['phone']) ?? '';
+  String get assigneeEmail =>
+      _asString(assignee?['email']) ?? '';
+
+  bool get hasStructuredLocation =>
+      (locationType != null && locationType!.trim().isNotEmpty) ||
+      (flatNo != null && flatNo!.trim().isNotEmpty) ||
+      (exactLocation != null && exactLocation!.trim().isNotEmpty);
+
+  String get locationTypeDisplay {
+    switch (locationType?.toLowerCase()) {
+      case 'my_flat':
+        return 'My Flat';
+      case 'common_area':
+        return 'Common Area';
+      case 'parking':
+        return 'Parking';
+      case 'lift':
+        return 'Lift';
+      case 'garden':
+        return 'Garden';
+      case 'clubhouse':
+        return 'Clubhouse';
+      case 'other':
+        return 'Other';
+      default:
+        return locationType ?? '';
+    }
+  }
+
+  String get locationDisplay {
+    final parts = <String>[];
+    if (locationType != null && locationType!.trim().isNotEmpty) {
+      parts.add(locationTypeDisplay);
+    }
+    if (flatNo != null && flatNo!.trim().isNotEmpty) {
+      parts.add('Flat: ${flatNo!.trim()}');
+    }
+    if (exactLocation != null && exactLocation!.trim().isNotEmpty) {
+      parts.add(exactLocation!.trim());
+    }
+    return parts.isEmpty ? 'Not specified' : parts.join(' • ');
+  }
 
   factory SocietyComplaintModel.fromJson(Map<String, dynamic> json) {
     return SocietyComplaintModel(
@@ -326,6 +492,10 @@ class SocietyComplaintModel {
       title: _asString(json['title']) ?? '',
       description: _asString(json['description']) ?? '',
       category: _asString(json['category']) ?? 'general',
+      subCategory: _asString(json['sub_category'] ?? json['subCategory']),
+      locationType: _asString(json['location_type'] ?? json['locationType']),
+      flatNo: _asString(json['flat_no'] ?? json['flatNo']),
+      exactLocation: _asString(json['exact_location'] ?? json['exactLocation']),
       priority: _asString(json['priority'])?.toLowerCase() ?? 'medium',
       status: _asString(json['status'])?.toLowerCase() ?? 'open',
       assignedTo: _asInt(json['assigned_to'] ?? json['assignedTo']),
@@ -338,16 +508,161 @@ class SocietyComplaintModel {
     );
   }
 
+  bool get isReopened =>
+      (status.toLowerCase() == 'open' || status.toLowerCase() == 'in_progress') && resolvedAt != null;
+
+  String get statusBadgeLabel =>
+      isReopened && status.toLowerCase() == 'open' ? 'REOPENED' : status.replaceAll('_', ' ').toUpperCase();
+
+  String get residentFlatDisplay =>
+      (flatNo != null && flatNo!.trim().isNotEmpty)
+          ? flatNo!.trim()
+          : (_asString(user?['flat_no']) ?? '');
+
+  String get residentPhone => _asString(user?['phone']) ?? '';
+  String get residentEmail => _asString(user?['email']) ?? '';
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'society_id': societyId,
     'title': title,
     'description': description,
     'category': category,
+    'sub_category': subCategory,
+    'location_type': locationType,
+    'flat_no': flatNo,
+    'exact_location': exactLocation,
     'priority': priority,
     'status': status,
   };
 }
+
+// ─── 4b. Society Complaint Summary Model ────────────────────────────────────
+class SocietyComplaintSummaryModel {
+  final int total;
+  final int open;
+  final int assigned;
+  final int inProgress;
+  final int resolved;
+  final int closed;
+
+  const SocietyComplaintSummaryModel({
+    this.total = 0,
+    this.open = 0,
+    this.assigned = 0,
+    this.inProgress = 0,
+    this.resolved = 0,
+    this.closed = 0,
+  });
+
+  factory SocietyComplaintSummaryModel.fromJson(Map<String, dynamic> json) {
+    return SocietyComplaintSummaryModel(
+      total: _asInt(json['total']) ?? 0,
+      open: _asInt(json['open']) ?? 0,
+      assigned: _asInt(json['assigned']) ?? 0,
+      inProgress: _asInt(json['in_progress'] ?? json['inProgress']) ?? 0,
+      resolved: _asInt(json['resolved']) ?? 0,
+      closed: _asInt(json['closed']) ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'total': total,
+    'open': open,
+    'assigned': assigned,
+    'in_progress': inProgress,
+    'resolved': resolved,
+    'closed': closed,
+  };
+}
+
+// ─── 4c. Society Complaint History Item Model ──────────────────────────────
+class SocietyComplaintHistoryItemModel {
+  final int id;
+  final int? societyId;
+  final int? actorUserId;
+  final String action;
+  final int? targetUserId;
+  final String? targetEntityType;
+  final int? targetEntityId;
+  final Map<String, dynamic>? oldValue;
+  final Map<String, dynamic>? newValue;
+  final String? reason;
+  final DateTime? createdAt;
+  final Map<String, dynamic>? actor;
+  final Map<String, dynamic>? targetUser;
+
+  const SocietyComplaintHistoryItemModel({
+    required this.id,
+    this.societyId,
+    this.actorUserId,
+    required this.action,
+    this.targetUserId,
+    this.targetEntityType,
+    this.targetEntityId,
+    this.oldValue,
+    this.newValue,
+    this.reason,
+    this.createdAt,
+    this.actor,
+    this.targetUser,
+  });
+
+  String get actorName =>
+      _asString(actor?['userName'] ?? actor?['name']) ??
+      (actorUserId != null ? 'User #$actorUserId' : 'System');
+
+  String get targetName =>
+      _asString(targetUser?['userName'] ?? targetUser?['name']) ??
+      (targetUserId != null ? 'User #$targetUserId' : '');
+
+  String get actionTitle => formattedTitle;
+
+  String get remark =>
+      reason ??
+      _asString(newValue?['remark']) ??
+      _asString(newValue?['resolution_note']) ??
+      '';
+
+  String get formattedTitle {
+    switch (action) {
+      case 'society.complaint_created':
+        return 'Complaint Raised';
+      case 'society.complaint_assigned':
+        return targetName.isNotEmpty ? 'Assigned to $targetName' : 'Complaint Assigned';
+      case 'society.complaint_status_changed':
+        final newStatus = _asString(newValue?['status'])?.toLowerCase();
+        if (newStatus == 'in_progress') return 'Work Started (In Progress)';
+        if (newStatus == 'resolved') return 'Marked Resolved';
+        if (newStatus == 'closed') return 'Complaint Closed';
+        if (newStatus == 'open') return 'Complaint Reopened';
+        return 'Status Changed: ${newStatus?.toUpperCase() ?? ''}';
+      case 'society.complaint_deleted':
+        return 'Complaint Deleted';
+      default:
+        return action.replaceAll('society.', '').replaceAll('_', ' ').toUpperCase();
+    }
+  }
+
+  factory SocietyComplaintHistoryItemModel.fromJson(Map<String, dynamic> json) {
+    return SocietyComplaintHistoryItemModel(
+      id: _asInt(json['id']) ?? 0,
+      societyId: _asInt(json['society_id'] ?? json['societyId']),
+      actorUserId: _asInt(json['actor_user_id'] ?? json['actorUserId']),
+      action: _asString(json['action']) ?? '',
+      targetUserId: _asInt(json['target_user_id'] ?? json['targetUserId']),
+      targetEntityType: _asString(json['target_entity_type'] ?? json['targetEntityType']),
+      targetEntityId: _asInt(json['target_entity_id'] ?? json['targetEntityId']),
+      oldValue: json['old_value'] is Map ? Map<String, dynamic>.from(json['old_value'] as Map) : null,
+      newValue: json['new_value'] is Map ? Map<String, dynamic>.from(json['new_value'] as Map) : null,
+      reason: _asString(json['reason']),
+      createdAt: _asDateTime(json['created_at'] ?? json['createdAt']),
+      actor: json['actor'] is Map ? Map<String, dynamic>.from(json['actor'] as Map) : null,
+      targetUser: json['targetUser'] is Map ? Map<String, dynamic>.from(json['targetUser'] as Map) : null,
+    );
+  }
+}
+
 
 // ─── 5. Society Facility Model ──────────────────────────────────────────────
 class SocietyFacilityModel {

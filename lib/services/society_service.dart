@@ -362,6 +362,9 @@ class SocietyService {
     int societyId, {
     String? priority,
     String? category,
+    String? status,
+    String? audience,
+    String? search,
     bool? isPinned,
     bool includeExpired = false,
     int page = 1,
@@ -375,6 +378,9 @@ class SocietyService {
         'limit': limit,
         if (priority != null && priority.isNotEmpty) 'priority': priority,
         if (category != null && category.isNotEmpty) 'category': category,
+        if (status != null && status.isNotEmpty) 'status': status,
+        if (audience != null && audience.isNotEmpty) 'audience': audience,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
         if (isPinned != null) 'is_pinned': isPinned,
         if (includeExpired) 'include_expired': true,
       };
@@ -411,22 +417,34 @@ class SocietyService {
   Future<SocietyAnnouncementModel> createAnnouncement(
     int societyId, {
     required String title,
+    String? summary,
     required String message,
+    String? actionText,
+    String audience = 'entire_society',
     String priority = 'medium',
     String category = 'general',
     bool isPinned = false,
+    String status = 'published',
+    DateTime? publishAt,
     DateTime? expiresAt,
+    List<Map<String, dynamic>>? attachments,
   }) async {
     try {
       final opts = await _authOptions();
       final body = <String, dynamic>{
         'society_id': societyId,
         'title': title.trim(),
+        if (summary != null && summary.trim().isNotEmpty) 'summary': summary.trim(),
         'message': message.trim(),
+        if (actionText != null && actionText.trim().isNotEmpty) 'action_text': actionText.trim(),
+        'audience': audience,
         'priority': priority,
         'category': category,
         'is_pinned': isPinned,
+        'status': status,
+        if (publishAt != null) 'publish_at': publishAt.toIso8601String(),
         if (expiresAt != null) 'expires_at': expiresAt.toIso8601String(),
+        if (attachments != null && attachments.isNotEmpty) 'attachments': attachments,
       };
       final res = await _dio.post(ApiConfig.societyAnnouncements, data: body, options: opts);
       final resBody = _toMap(res.data);
@@ -460,6 +478,71 @@ class SocietyService {
     }
   }
 
+  Future<SocietyAnnouncementModel> archiveAnnouncement(int id, int societyId) async {
+    try {
+      final opts = await _authOptions();
+      final res = await _dio.put(
+        ApiConfig.societyAnnouncementArchive(id),
+        data: {'society_id': societyId},
+        options: opts,
+      );
+      final resBody = _toMap(res.data);
+      final data = resBody['data'];
+      if (data is Map) {
+        return SocietyAnnouncementModel.fromJson(_toMap(data));
+      }
+      throw const SocietyServiceException('Invalid archive announcement response');
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to archive announcement');
+    }
+  }
+
+  Future<AnnouncementAttachmentModel> uploadAnnouncementAttachment(
+    int societyId, {
+    String? filePath,
+    List<int>? fileBytes,
+    String? fileName,
+  }) async {
+    try {
+      final opts = await _authOptions();
+      final headers = Map<String, dynamic>.from(opts.headers ?? {});
+      headers['x-society-id'] = societyId.toString();
+      opts.headers = headers;
+
+      final MultipartFile filePart;
+      if (fileBytes != null && fileBytes.isNotEmpty) {
+        filePart = MultipartFile.fromBytes(
+          fileBytes,
+          filename: fileName ?? 'attachment_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+      } else if (filePath != null && filePath.isNotEmpty) {
+        filePart = await MultipartFile.fromFile(filePath, filename: fileName);
+      } else {
+        throw const SocietyServiceException('No file content or path provided for upload');
+      }
+
+      final formData = FormData.fromMap({
+        'society_id': societyId.toString(),
+        'file': filePart,
+      });
+
+      final res = await _dio.post(
+        ApiConfig.societyAnnouncementUpload,
+        queryParameters: {'society_id': societyId},
+        data: formData,
+        options: opts,
+      );
+      final resBody = _toMap(res.data);
+      final data = resBody['data'];
+      if (data is Map) {
+        return AnnouncementAttachmentModel.fromJson(_toMap(data));
+      }
+      throw const SocietyServiceException('Invalid upload announcement attachment response');
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to upload notice attachment');
+    }
+  }
+
   Future<void> deleteAnnouncement(int id, int societyId, {String? deletedRemarks}) async {
     try {
       final opts = await _authOptions();
@@ -474,12 +557,43 @@ class SocietyService {
     }
   }
 
+  Future<int> bulkDeleteAnnouncements(
+    List<int> ids,
+    int societyId, {
+    String? deletedRemarks,
+  }) async {
+    try {
+      final opts = await _authOptions();
+      final headers = Map<String, dynamic>.from(opts.headers ?? {});
+      headers['x-society-id'] = societyId.toString();
+      opts.headers = headers;
+
+      final res = await _dio.post(
+        ApiConfig.societyAnnouncementBulkDelete,
+        data: {
+          'ids': ids,
+          'society_id': societyId,
+          if (deletedRemarks != null) 'deletedRemarks': deletedRemarks,
+        },
+        options: opts,
+      );
+      final resBody = _toMap(res.data);
+      final data = _toMap(resBody['data']);
+      return (data['count'] as num?)?.toInt() ?? ids.length;
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to bulk delete announcements');
+    }
+  }
+
   // ─── 4. Society Complaint APIs ────────────────────────────────────────────
   Future<SocietyPaginatedResponse<SocietyComplaintModel>> getComplaints(
     int societyId, {
     String? status,
     String? priority,
     String? category,
+    String? locationType,
+    String? assigned,
+    String? search,
     bool myOnly = false,
     int page = 1,
     int limit = 20,
@@ -490,9 +604,12 @@ class SocietyService {
         'society_id': societyId,
         'page': page,
         'limit': limit,
-        if (status != null && status.isNotEmpty) 'status': status,
-        if (priority != null && priority.isNotEmpty) 'priority': priority,
-        if (category != null && category.isNotEmpty) 'category': category,
+        if (status != null && status.isNotEmpty && status != 'all') 'status': status,
+        if (priority != null && priority.isNotEmpty && priority != 'all') 'priority': priority,
+        if (category != null && category.isNotEmpty && category != 'all') 'category': category,
+        if (locationType != null && locationType.isNotEmpty && locationType != 'all') 'location_type': locationType,
+        if (assigned != null && assigned.isNotEmpty && assigned != 'all') 'assigned': assigned,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
         if (myOnly) 'my_only': true,
       };
       final res = await _dio.get(ApiConfig.societyComplaints, queryParameters: query, options: opts);
@@ -503,6 +620,46 @@ class SocietyService {
       );
     } on DioException catch (e) {
       throw _formatDioError(e, 'Failed to load complaints');
+    }
+  }
+
+  Future<SocietyComplaintSummaryModel> getComplaintSummary(int societyId) async {
+    try {
+      final opts = await _authOptions();
+      final res = await _dio.get(
+        '${ApiConfig.societyComplaints}/summary',
+        queryParameters: {'society_id': societyId},
+        options: opts,
+      );
+      final resBody = _toMap(res.data);
+      final data = resBody['data'];
+      if (data is Map) {
+        return SocietyComplaintSummaryModel.fromJson(_toMap(data));
+      }
+      return const SocietyComplaintSummaryModel();
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to fetch complaint summary');
+    }
+  }
+
+  Future<List<SocietyComplaintHistoryItemModel>> getComplaintHistory(int id, int societyId) async {
+    try {
+      final opts = await _authOptions();
+      final res = await _dio.get(
+        '${ApiConfig.societyComplaint(id)}/history',
+        queryParameters: {'society_id': societyId},
+        options: opts,
+      );
+      final resBody = _toMap(res.data);
+      final data = resBody['data'];
+      if (data is List) {
+        return data
+            .map((item) => SocietyComplaintHistoryItemModel.fromJson(_toMap(item)))
+            .toList();
+      }
+      return [];
+    } on DioException catch (e) {
+      throw _formatDioError(e, 'Failed to fetch complaint history');
     }
   }
 
@@ -530,6 +687,10 @@ class SocietyService {
     required String title,
     required String description,
     String category = 'general',
+    String? subCategory,
+    String? locationType,
+    String? flatNo,
+    String? exactLocation,
     String priority = 'medium',
   }) async {
     try {
@@ -540,6 +701,14 @@ class SocietyService {
         'description': description.trim(),
         'category': category,
         'priority': priority,
+        if (subCategory != null && subCategory.trim().isNotEmpty)
+          'sub_category': subCategory.trim(),
+        if (locationType != null && locationType.trim().isNotEmpty)
+          'location_type': locationType.trim(),
+        if (flatNo != null && flatNo.trim().isNotEmpty)
+          'flat_no': flatNo.trim(),
+        if (exactLocation != null && exactLocation.trim().isNotEmpty)
+          'exact_location': exactLocation.trim(),
       };
       final res = await _dio.post(ApiConfig.societyComplaints, data: body, options: opts);
       final resBody = _toMap(res.data);
@@ -578,6 +747,32 @@ class SocietyService {
     }
   }
 
+  Future<SocietyComplaintModel> closeComplaint(
+    int id,
+    int societyId, {
+    String? remark,
+  }) {
+    return updateComplaintStatus(
+      id,
+      societyId,
+      status: 'closed',
+      remark: remark ?? 'Closed by resident',
+    );
+  }
+
+  Future<SocietyComplaintModel> reopenComplaint(
+    int id,
+    int societyId, {
+    required String reason,
+  }) {
+    return updateComplaintStatus(
+      id,
+      societyId,
+      status: 'open',
+      remark: reason.trim(),
+    );
+  }
+
   Future<SocietyComplaintModel> assignComplaint(
     int id,
     int societyId, {
@@ -601,6 +796,58 @@ class SocietyService {
     }
   }
 
+  // --- Complaint Master APIs ---
+  Future<List<Map<String, dynamic>>> getComplaintCategories() async {
+    try {
+      final opts = await _authOptions();
+      final res = await _dio.get(ApiConfig.complaintCategories, options: opts);
+      final resBody = _toMap(res.data);
+      final data = resBody['data'];
+      if (data is List) {
+        return data.whereType<Map>().map((e) => _toMap(e)).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getComplaintSubCategories({int? categoryId}) async {
+    try {
+      final opts = await _authOptions();
+      final query = categoryId != null ? {'category_id': categoryId} : null;
+      final res = await _dio.get(
+        ApiConfig.complaintSubCategories,
+        queryParameters: query,
+        options: opts,
+      );
+      final resBody = _toMap(res.data);
+      final data = resBody['data'];
+      if (data is List) {
+        return data.whereType<Map>().map((e) => _toMap(e)).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getComplaintLocationTypes() async {
+    try {
+      final opts = await _authOptions();
+      final res = await _dio.get(ApiConfig.complaintLocationTypes, options: opts);
+      final resBody = _toMap(res.data);
+      final data = resBody['data'];
+      if (data is List) {
+        return data.whereType<Map>().map((e) => _toMap(e)).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // --- 5. Society Facility APIs
   // ─── 5. Society Facility APIs ─────────────────────────────────────────────
   Future<List<SocietyFacilityModel>> getFacilities(int societyId, {bool? isActive}) async {
     try {

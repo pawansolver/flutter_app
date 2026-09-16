@@ -72,7 +72,7 @@ class AboutScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Version 1.0.12',
+              'Version 1.0.13',
               style: TextStyle(
                 color: Color(0xFF6B7280),
                 fontSize: 14,

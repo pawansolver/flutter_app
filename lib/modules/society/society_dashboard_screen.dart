@@ -7,6 +7,7 @@ import 'parking_screen.dart';
 import 'society_profile_screen.dart';
 import 'society_members_screen.dart';
 import 'society_emergency_contacts_screen.dart';
+import 'resident_complaints_screen.dart';
 import '../events/events_screen.dart';
 import '../events/event_detail_screen.dart';
 import '../../services/society_service.dart';
@@ -124,7 +125,7 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
   }
 
   final List<Map<String, dynamic>> _quickActions = [
-    {'title': 'Complaints', 'icon': Icons.report_problem_outlined, 'tab': 0, 'route': 'ops'},
+    {'title': 'Complaints', 'icon': Icons.report_problem_outlined, 'tab': -1, 'route': 'complaints'},
     {'title': 'Announcements', 'icon': Icons.campaign_outlined, 'tab': -1, 'route': 'announcements'},
     {'title': 'Visitors', 'icon': Icons.people_outline, 'tab': 1, 'route': 'ops'},
     {'title': 'Parking', 'icon': Icons.local_parking, 'tab': -1, 'route': 'parking'},
@@ -141,6 +142,20 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
     final societyId = _activeSociety?.id;
 
     switch (route) {
+      case 'complaints':
+        final isMgmt = _userRole.toLowerCase() == 'admin' ||
+            _userRole.toLowerCase() == 'committee' ||
+            _userRole.toLowerCase() == 'owner';
+        if (isMgmt) {
+          Navigator.push(context, MaterialPageRoute(
+            builder: (_) => SocietyOperationsScreen(initialTab: 0, societyId: societyId),
+          ));
+        } else {
+          Navigator.push(context, MaterialPageRoute(
+            builder: (_) => ResidentComplaintsScreen(societyId: societyId),
+          ));
+        }
+        break;
       case 'ops':
         if (tab >= 0) {
           Navigator.push(context, MaterialPageRoute(
@@ -179,199 +194,6 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
         ));
         break;
     }
-  }
-
-  void _showComplaintModal() {
-    if (_activeSociety == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No active society selected')),
-      );
-      return;
-    }
-
-    final titleController = TextEditingController();
-    final categoryController = TextEditingController(text: 'General');
-    final descController = TextEditingController();
-    bool isSubmitting = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: 24,
-                right: 24,
-                top: 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Raise a Complaint',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF111827),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.grey),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField('Complaint Title', 'e.g., Water leakage in block A', titleController),
-                  const SizedBox(height: 16),
-                  _buildTextField('Category', 'Plumbing, Electricity, Security, Lift...', categoryController),
-                  const SizedBox(height: 16),
-                  _buildTextField('Description', 'Provide details here...', descController, maxLines: 3),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF111827),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      onPressed: isSubmitting
-                          ? null
-                          : () async {
-                              final title = titleController.text.trim();
-                              final desc = descController.text.trim();
-                              final category = categoryController.text.trim().toLowerCase();
-
-                              if (title.isEmpty || desc.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Please fill title and description')),
-                                );
-                                return;
-                              }
-
-                              setModalState(() { isSubmitting = true; });
-
-                              try {
-                                try {
-                                  await _societyService.createComplaint(
-                                    _activeSociety!.id,
-                                    title: title,
-                                    description: desc,
-                                    category: category.isEmpty ? 'general' : category,
-                                    priority: 'medium',
-                                  );
-                                } on SocietyServiceException catch (e) {
-                                  if (e.statusCode == 403) {
-                                    // Auto-join society and retry
-                                    await _societyService.joinSociety(_activeSociety!.id);
-                                    await _societyService.createComplaint(
-                                      _activeSociety!.id,
-                                      title: title,
-                                      description: desc,
-                                      category: category.isEmpty ? 'general' : category,
-                                      priority: 'medium',
-                                    );
-                                  } else {
-                                    rethrow;
-                                  }
-                                }
-                                if (ctx.mounted) Navigator.pop(ctx);
-                                if (mounted) {
-                                  ScaffoldMessenger.of(this.context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Complaint submitted successfully.'),
-                                      backgroundColor: Color(0xFF10B981),
-                                    ),
-                                  );
-                                }
-                              } catch (err) {
-                                setModalState(() { isSubmitting = false; });
-                                if (ctx.mounted) {
-                                  ScaffoldMessenger.of(ctx).showSnackBar(
-                                    SnackBar(
-                                      content: Text(err.toString()),
-                                      backgroundColor: Colors.redAccent,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                      child: isSubmitting
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Text(
-                              'Submit Ticket',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildTextField(String label, String hint, TextEditingController controller, {int maxLines = 1}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF111827),
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          maxLines: maxLines,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFF111827)),
-            ),
-          ),
-        ),
-      ],
-    );
   }
 
   @override
@@ -766,7 +588,17 @@ class _SocietyDashboardScreenState extends State<SocietyDashboardScreen> {
                             ),
                             backgroundColor: Colors.transparent,
                           ),
-                          onPressed: _showComplaintModal,
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ResidentComplaintsScreen(
+                                  societyId: _activeSociety?.id,
+                                  autoOpenCreate: true,
+                                ),
+                              ),
+                            );
+                          },
                           child: const Text(
                             '+ Raise a Complaint',
                             style: TextStyle(
