@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/society_models.dart';
 import '../../services/society_service.dart';
+import '../../services/auth_session.dart';
 
 class ComplaintDetailScreen extends StatefulWidget {
   final SocietyComplaintModel complaint;
@@ -21,9 +22,16 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
   late SocietyComplaintModel _complaint;
   bool _isLoading = false;
   bool _isActionInProgress = false;
+  int? _currentUserId;
 
   bool get _isManagementUser =>
-      widget.userRole.toLowerCase() == 'admin' || widget.userRole.toLowerCase() == 'committee';
+      widget.userRole.toLowerCase() == 'admin' ||
+      widget.userRole.toLowerCase() == 'committee' ||
+      widget.userRole.toLowerCase() == 'owner';
+
+  // Worker can manage their own assigned complaint regardless of role
+  bool get _isAssignedWorker =>
+      _currentUserId != null && _complaint.assignedTo == _currentUserId;
 
   List<SocietyComplaintHistoryItemModel> _history = [];
   bool _isLoadingHistory = false;
@@ -32,8 +40,14 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
   void initState() {
     super.initState();
     _complaint = widget.complaint;
+    _loadCurrentUser();
     _refreshComplaint();
     _loadHistory();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final userId = await AuthSessionStore().readUserId();
+    if (mounted) setState(() => _currentUserId = userId);
   }
 
   Future<void> _refreshComplaint() async {
@@ -65,6 +79,53 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
       }
     } catch (_) {
       if (mounted) setState(() => _isLoadingHistory = false);
+    }
+  }
+
+  // Worker Action: Accept Task
+  Future<void> _handleAcceptTask() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.task_alt, color: Color(0xFF0284C7), size: 24),
+            SizedBox(width: 8),
+            Text('Accept Task', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'Accept this complaint task? You will be responsible for resolving it.',
+          style: TextStyle(fontSize: 13, color: Color(0xFF4B5563), height: 1.4),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B7280)))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Accept Task'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      setState(() => _isActionInProgress = true);
+      try {
+        final updated = await _societyService.updateComplaintStatus(
+          _complaint.id, _complaint.societyId, status: 'accepted', remark: 'Task accepted by assigned worker',
+        );
+        if (mounted) {
+          setState(() { _complaint = updated; _isActionInProgress = false; });
+          _loadHistory();
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Task accepted. Please start work when ready.'), backgroundColor: Color(0xFF0284C7)));
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isActionInProgress = false);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: const Color(0xFFEF4444)));
+        }
+      }
     }
   }
 
@@ -250,6 +311,7 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
       builder: (ctx) => _AssignStaffBottomSheet(
         societyId: _complaint.societyId,
         complaintId: _complaint.id,
+        complaintCategory: _complaint.category,
         creatorUserId: _complaint.userId,
         currentAssigneeId: _complaint.assignedTo,
         onAssigned: (updated) {
@@ -504,43 +566,49 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                       const SizedBox(height: 16),
                     ],
 
-                    // 5. Management Action Card
+                    // 5. Worker Action Card (if current user is assigned worker)
+                    if (_isAssignedWorker && !_isManagementUser) ...[
+                      _buildWorkerActionsCard(),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // 6. Management Action Card
                     if (_isManagementUser) ...[
                       _buildManagementActionsCard(),
                       const SizedBox(height: 16),
                     ],
 
-                    // 6. Resident Action Banner (If Resolved & resident view)
-                    if (_complaint.isResolved && !_isManagementUser) ...[
+                    // 7. Resident Action Banner (If Resolved & resident view)
+                    if (_complaint.isResolved && !_isManagementUser && !_isAssignedWorker) ...[
                       _buildResidentResolutionActionCard(),
                       const SizedBox(height: 16),
                     ],
 
-                    // 7. Closed State Banner
+                    // 8. Closed State Banner
                     if (_complaint.isClosed) ...[
                       _buildClosedCard(),
                       const SizedBox(height: 16),
                     ],
 
-                    // 8. Status Tracker / Stepper
+                    // 9. Status Tracker / Stepper
                     _buildStatusTrackerCard(),
                     const SizedBox(height: 16),
 
-                    // 9. Complaint Details Section
+                    // 10. Complaint Details Section
                     _buildComplaintDetailsCard(),
                     const SizedBox(height: 16),
 
-                    // 10. Assignment Information Section
+                    // 11. Assignment Information Section
                     _buildAssignmentCard(),
                     const SizedBox(height: 16),
 
-                    // 11. Resolution Information Section
+                    // 12. Resolution Information Section
                     if (_complaint.hasResolution || _complaint.isResolved || _complaint.isClosed) ...[
                       _buildResolutionCard(),
                       const SizedBox(height: 16),
                     ],
 
-                    // 12. History Timeline Section
+                    // 13. History Timeline Section
                     _buildHistoryTimelineCard(),
                     const SizedBox(height: 24),
                   ],
@@ -1368,6 +1436,122 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
     );
   }
 
+  // ─── Worker Task Actions Card (Assigned Worker Only) ──────────────────────
+  Widget _buildWorkerActionsCard() {
+    final status = _complaint.status.toLowerCase();
+
+    // Determine what action is available based on state machine
+    String? actionLabel;
+    String? actionSubtitle;
+    Color actionColor = const Color(0xFF0284C7);
+    IconData actionIcon = Icons.task_alt;
+    VoidCallback? onAction;
+
+    if (status == 'assigned') {
+      actionLabel = 'Accept Task';
+      actionSubtitle = 'Acknowledge that you have received and will handle this complaint.';
+      actionColor = const Color(0xFF0284C7);
+      actionIcon = Icons.task_alt;
+      onAction = _handleAcceptTask;
+    } else if (status == 'accepted') {
+      actionLabel = 'Start Work';
+      actionSubtitle = 'Indicate that you have begun working on resolving this complaint.';
+      actionColor = const Color(0xFF7C3AED);
+      actionIcon = Icons.play_circle_outline;
+      onAction = _handleStartWork;
+    } else if (status == 'in_progress') {
+      actionLabel = 'Mark Resolved';
+      actionSubtitle = 'Submit your resolution notes. The resident will be notified to review.';
+      actionColor = const Color(0xFF10B981);
+      actionIcon = Icons.check_circle_outline;
+      onAction = _handleMarkResolved;
+    }
+
+    final isWaiting = status == 'resolved' || status == 'closed';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isWaiting
+              ? [const Color(0xFFD1FAE5), const Color(0xFFF0FDF4)]
+              : [actionColor.withValues(alpha: 0.08), actionColor.withValues(alpha: 0.03)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isWaiting ? const Color(0xFF10B981).withValues(alpha: 0.3) : actionColor.withValues(alpha: 0.25),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: (isWaiting ? const Color(0xFF10B981) : actionColor).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  isWaiting ? Icons.hourglass_top_rounded : actionIcon,
+                  color: isWaiting ? const Color(0xFF10B981) : actionColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isWaiting ? 'Awaiting Resident Closure' : 'Your Task Action',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isWaiting ? const Color(0xFF065F46) : actionColor,
+                      ),
+                    ),
+                    Text(
+                      isWaiting
+                          ? 'You have resolved this complaint. Waiting for the resident to close the ticket.'
+                          : (actionSubtitle ?? ''),
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (!isWaiting && onAction != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isActionInProgress ? null : onAction,
+                icon: _isActionInProgress
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Icon(actionIcon, size: 18),
+                label: Text(actionLabel ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: actionColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   // ─── Management Actions Card (Section J) ──────────────────────────────────
   Widget _buildManagementActionsCard() {
     final status = _complaint.status.toLowerCase();
@@ -1761,10 +1945,11 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
   }
 }
 
-// ─── Assign Staff Bottom Sheet ────────────────────────────────────────────────
+// ─── Assign Staff Bottom Sheet (Enterprise Worker Matching) ─────────────────
 class _AssignStaffBottomSheet extends StatefulWidget {
   final int societyId;
   final int complaintId;
+  final String? complaintCategory;
   final int? creatorUserId;
   final int? currentAssigneeId;
   final ValueChanged<SocietyComplaintModel> onAssigned;
@@ -1772,6 +1957,7 @@ class _AssignStaffBottomSheet extends StatefulWidget {
   const _AssignStaffBottomSheet({
     required this.societyId,
     required this.complaintId,
+    this.complaintCategory,
     this.creatorUserId,
     this.currentAssigneeId,
     required this.onAssigned,
@@ -1785,7 +1971,12 @@ class _AssignStaffBottomSheetState extends State<_AssignStaffBottomSheet> {
   final _societyService = SocietyService();
   bool _isLoading = true;
   String? _error;
-  List<SocietyMemberModel> _eligibleMembers = [];
+
+  List<EligibleWorkerModel> _recommendedWorkers = [];
+  List<EligibleWorkerModel> _marketplaceWorkers = [];
+  List<EligibleWorkerModel> _otherWorkers = [];
+  List<SocietyMemberModel> _managementMembers = [];
+
   int? _selectedUserId;
   bool _isSaving = false;
 
@@ -1793,35 +1984,49 @@ class _AssignStaffBottomSheetState extends State<_AssignStaffBottomSheet> {
   void initState() {
     super.initState();
     _selectedUserId = widget.currentAssigneeId;
-    _fetchMembers();
+    _fetchAssignees();
   }
 
-  Future<void> _fetchMembers() async {
+  Future<void> _fetchAssignees() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
+
     try {
-      final res = await _societyService.getMembers(
+      // 1. Fetch eligible workers (skill-matched + other authorized workers + marketplace providers)
+      final workersMap = await _societyService.getEligibleWorkers(
+        widget.societyId,
+        category: widget.complaintCategory,
+      ).catchError((_) => {'recommended': <EligibleWorkerModel>[], 'others': <EligibleWorkerModel>[], 'marketplace': <EligibleWorkerModel>[]});
+
+      // 2. Fetch society members for management fallback (admin/committee)
+      final membersRes = await _societyService.getMembers(
         widget.societyId,
         status: 'active',
-        limit: 100,
-      );
+        limit: 50,
+      ).catchError((_) => const SocietyPaginatedResponse<SocietyMemberModel>(data: [], page: 1, limit: 50, total: 0, totalPages: 1));
 
-      final list = res.data;
+      final rec = workersMap['recommended'] ?? [];
+      final oth = workersMap['others'] ?? [];
+      final mkt = workersMap['marketplace'] ?? [];
 
-      // Filter for authorized management/staff roles: admin, committee (enforced by backend validation)
-      final allowedRoles = {'admin', 'committee'};
-      final filtered = list.where((m) {
+      // Management members who aren't creator and aren't already listed as workers
+      final workerUserIds = {...rec.map((w) => w.userId), ...oth.map((w) => w.userId), ...mkt.map((w) => w.userId)};
+      final mgmt = membersRes.data.where((m) {
         final role = m.role.toLowerCase();
-        final isEligibleRole = allowedRoles.contains(role);
+        final isMgmt = role == 'admin' || role == 'committee';
         final isNotCreator = widget.creatorUserId == null || m.userId != widget.creatorUserId;
-        return isEligibleRole && isNotCreator;
+        final notInWorkers = !workerUserIds.contains(m.userId);
+        return isMgmt && isNotCreator && notInWorkers;
       }).toList();
 
       if (mounted) {
         setState(() {
-          _eligibleMembers = filtered;
+          _recommendedWorkers = rec.where((w) => widget.creatorUserId == null || w.userId != widget.creatorUserId).toList();
+          _otherWorkers = oth.where((w) => widget.creatorUserId == null || w.userId != widget.creatorUserId).toList();
+          _marketplaceWorkers = mkt.where((w) => widget.creatorUserId == null || w.userId != widget.creatorUserId).toList();
+          _managementMembers = mgmt;
           _isLoading = false;
         });
       }
@@ -1843,13 +2048,14 @@ class _AssignStaffBottomSheetState extends State<_AssignStaffBottomSheet> {
         widget.complaintId,
         widget.societyId,
         assignedTo: _selectedUserId!,
+        reason: 'Assigned via Mobile App',
       );
       if (mounted) {
         Navigator.pop(context);
         widget.onAssigned(updated);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Staff successfully assigned to complaint.'),
+            content: Text('Worker / Staff successfully assigned to complaint.'),
             backgroundColor: Color(0xFF10B981),
           ),
         );
@@ -1864,11 +2070,158 @@ class _AssignStaffBottomSheetState extends State<_AssignStaffBottomSheet> {
     }
   }
 
+  // Quick dialog to authorize a new worker (e.g. plumber) by phone
+  Future<void> _showAuthorizeWorkerDialog() async {
+    final phoneCtrl = TextEditingController();
+    final desigCtrl = TextEditingController(
+      text: (widget.complaintCategory != null && widget.complaintCategory!.isNotEmpty)
+          ? '${widget.complaintCategory![0].toUpperCase()}${widget.complaintCategory!.substring(1)} Specialist'
+          : 'Plumber',
+    );
+    bool isSubmitting = false;
+
+    await showDialog(
+      context: context,
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.person_add_alt_1, color: Color(0xFF2563EB)),
+              SizedBox(width: 8),
+              Text('Authorize Worker', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Enter the registered mobile number of the worker (e.g., Plumber, Electrician) to authorize them for this society.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                ),
+                if (_marketplaceWorkers.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Quick Select from Marketplace Partners:',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF4B5563)),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _marketplaceWorkers.map((m) => ActionChip(
+                      avatar: const Icon(Icons.handyman, size: 13, color: Color(0xFFFF6B00)),
+                      label: Text(m.displayName, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                      backgroundColor: const Color(0xFFFFF7ED),
+                      side: const BorderSide(color: Color(0xFFFFEDD5)),
+                      onPressed: () {
+                        setDlgState(() {
+                          if (m.phone != null) phoneCtrl.text = m.phone!;
+                          desigCtrl.text = m.designation;
+                        });
+                      },
+                    )).toList(),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'Worker Mobile Number *',
+                    hintText: 'e.g. 9876543210',
+                    prefixIcon: const Icon(Icons.phone, size: 20),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: desigCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Designation / Trade *',
+                    hintText: 'e.g. Plumber, Electrician',
+                    prefixIcon: const Icon(Icons.badge_outlined, size: 20),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(dlgCtx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: isSubmitting ? null : () async {
+                final phone = phoneCtrl.text.trim();
+                final desig = desigCtrl.text.trim();
+                if (phone.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter mobile number'), backgroundColor: Color(0xFFEF4444)),
+                  );
+                  return;
+                }
+                if (desig.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter designation'), backgroundColor: Color(0xFFEF4444)),
+                  );
+                  return;
+                }
+
+                setDlgState(() => isSubmitting = true);
+                try {
+                  final newWorker = await _societyService.authorizeWorker(
+                    widget.societyId,
+                    phone: phone,
+                    designation: desig,
+                  );
+                  if (mounted) {
+                    Navigator.pop(dlgCtx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Worker "$desig" authorized successfully!'), backgroundColor: const Color(0xFF10B981)),
+                    );
+                    final newUserId = newWorker['user_id'] is int ? newWorker['user_id'] as int : int.tryParse(newWorker['user_id'].toString());
+                    if (newUserId != null) {
+                      _selectedUserId = newUserId;
+                    }
+                    _fetchAssignees();
+                  }
+                } catch (err) {
+                  setDlgState(() => isSubmitting = false);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(err.toString()), backgroundColor: const Color(0xFFEF4444)),
+                    );
+                  }
+                }
+              },
+              child: isSubmitting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Authorize & Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final totalCount = _recommendedWorkers.length + _otherWorkers.length + _marketplaceWorkers.length + _managementMembers.length;
+
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.75,
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
       ),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -1891,7 +2244,8 @@ class _AssignStaffBottomSheetState extends State<_AssignStaffBottomSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+
             // Header
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1901,30 +2255,53 @@ class _AssignStaffBottomSheetState extends State<_AssignStaffBottomSheet> {
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Assign Staff / Member',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+                      children: [
+                        const Text(
+                          'Assign Worker to Complaint',
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Select an authorized society admin or committee member',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Text(
+                              'Complaint #${widget.complaintId}',
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                            ),
+                            if (widget.complaintCategory != null && widget.complaintCategory!.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  widget.complaintCategory!,
+                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Color(0xFF6B7280)),
-                    onPressed: () => Navigator.pop(context),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF2563EB),
+                      side: const BorderSide(color: Color(0xFF2563EB), width: 1),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: _showAuthorizeWorkerDialog,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Worker', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 24, color: Color(0xFFE5E7EB)),
+            const Divider(height: 20, color: Color(0xFFE5E7EB)),
+
             // Body
             Expanded(
               child: _isLoading
@@ -1941,92 +2318,164 @@ class _AssignStaffBottomSheetState extends State<_AssignStaffBottomSheet> {
                                 Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF4B5563), fontSize: 13)),
                                 const SizedBox(height: 12),
                                 ElevatedButton(
-                                  onPressed: _fetchMembers,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF111827),
-                                    foregroundColor: Colors.white,
-                                  ),
+                                  onPressed: _fetchAssignees,
+                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF111827), foregroundColor: Colors.white),
                                   child: const Text('Retry'),
                                 ),
                               ],
                             ),
                           ),
                         )
-                      : _eligibleMembers.isEmpty
-                          ? const Center(
+                      : totalCount == 0
+                          ? Center(
                               child: Padding(
-                                padding: EdgeInsets.all(24.0),
-                                child: Text(
-                                  'No eligible admin or committee members found in this society to assign.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+                                padding: const EdgeInsets.all(24.0),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.engineering_outlined, size: 48, color: Color(0xFF9CA3AF)),
+                                    const SizedBox(height: 12),
+                                    const Text(
+                                      'No authorized workers found for this society.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Color(0xFF374151), fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      'Tap "+ Add Worker" above to authorize a plumber, electrician, or technician by mobile number.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white),
+                                      onPressed: _showAuthorizeWorkerDialog,
+                                      icon: const Icon(Icons.person_add_alt_1, size: 18),
+                                      label: const Text('Authorize Plumber / Worker Now'),
+                                    ),
+                                  ],
                                 ),
                               ),
                             )
-                          : ListView.builder(
-                              itemCount: _eligibleMembers.length,
-                              itemBuilder: (ctx, index) {
-                                final member = _eligibleMembers[index];
-                                final isSelected = member.userId == _selectedUserId;
-
-                                return ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: isSelected ? const Color(0xFF2563EB) : const Color(0xFFF3F4F6),
-                                    child: Text(
-                                      member.memberName.isNotEmpty ? member.memberName[0].toUpperCase() : 'M',
-                                      style: TextStyle(
-                                        color: isSelected ? Colors.white : const Color(0xFF4B5563),
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    member.memberName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                                      color: const Color(0xFF111827),
-                                    ),
-                                  ),
-                                  subtitle: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFEFF6FF),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          member.role.toUpperCase(),
-                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
-                                        ),
-                                      ),
-                                      if (member.flatNo != null && member.flatNo!.isNotEmpty) ...[
-                                        const SizedBox(width: 8),
-                                        Flexible(
-                                          child: Text(
-                                            'Unit: ${member.flatNo}',
-                                            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
+                          : ListView(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              children: [
+                                // Section 1: Recommended Workers (Skill Matched)
+                                if (_recommendedWorkers.isNotEmpty) ...[
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6, bottom: 8),
+                                    child: Row(
+                                      children: const [
+                                        Icon(Icons.stars, color: Color(0xFF059669), size: 16),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'RECOMMENDED WORKERS (SKILL-MATCHED)',
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF059669), letterSpacing: 0.5),
                                         ),
                                       ],
-                                    ],
+                                    ),
                                   ),
-                                  trailing: isSelected
-                                      ? const Icon(Icons.check_circle, color: Color(0xFF2563EB))
-                                      : const Icon(Icons.radio_button_unchecked, color: Color(0xFFD1D5DB)),
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedUserId = member.userId;
-                                    });
-                                  },
-                                );
-                              },
+                                  ..._recommendedWorkers.map((w) => _buildWorkerTile(
+                                        userId: w.userId,
+                                        title: w.displayName,
+                                        designation: w.designation,
+                                        skills: w.skills,
+                                        phone: w.phone,
+                                        isRecommended: true,
+                                        badgeColor: const Color(0xFF059669),
+                                        badgeText: 'RECOMMENDED',
+                                      )),
+                                  const SizedBox(height: 10),
+                                ],
+
+                                // Section 2: Verified Marketplace Partners (e.g. Anni)
+                                if (_marketplaceWorkers.isNotEmpty) ...[
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6, bottom: 8),
+                                    child: Row(
+                                      children: const [
+                                        Icon(Icons.verified, color: Color(0xFFFF6B00), size: 16),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'VERIFIED MARKETPLACE PARTNERS',
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFFF6B00), letterSpacing: 0.5),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  ..._marketplaceWorkers.map((w) => _buildWorkerTile(
+                                        userId: w.userId,
+                                        title: w.displayName,
+                                        designation: w.designation,
+                                        skills: w.skills,
+                                        phone: w.phone,
+                                        isRecommended: false,
+                                        badgeColor: const Color(0xFFFF6B00),
+                                        badgeText: 'MARKETPLACE',
+                                        isMarketplace: true,
+                                        hourlyRate: w.hourlyRate,
+                                      )),
+                                  const SizedBox(height: 10),
+                                ],
+
+                                // Section 3: Other Authorized Workers
+                                if (_otherWorkers.isNotEmpty) ...[
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6, bottom: 8),
+                                    child: Row(
+                                      children: const [
+                                        Icon(Icons.engineering, color: Color(0xFF2563EB), size: 16),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'OTHER AUTHORIZED WORKERS',
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2563EB), letterSpacing: 0.5),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  ..._otherWorkers.map((w) => _buildWorkerTile(
+                                        userId: w.userId,
+                                        title: w.displayName,
+                                        designation: w.designation,
+                                        skills: w.skills,
+                                        phone: w.phone,
+                                        isRecommended: false,
+                                        badgeColor: const Color(0xFF2563EB),
+                                        badgeText: w.designation,
+                                      )),
+                                  const SizedBox(height: 10),
+                                ],
+
+                                // Section 4: Society Management (Admin / Committee Fallback)
+                                if (_managementMembers.isNotEmpty) ...[
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6, bottom: 8),
+                                    child: Row(
+                                      children: const [
+                                        Icon(Icons.shield_outlined, color: Color(0xFF6B7280), size: 16),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'SOCIETY MANAGEMENT (FALLBACK)',
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF6B7280), letterSpacing: 0.5),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  ..._managementMembers.map((m) => _buildWorkerTile(
+                                        userId: m.userId,
+                                        title: m.memberName,
+                                        designation: m.role.toUpperCase(),
+                                        skills: m.flatNo != null ? 'Unit: ${m.flatNo}' : null,
+                                        phone: null,
+                                        isRecommended: false,
+                                        badgeColor: const Color(0xFF6B7280),
+                                        badgeText: m.role.toUpperCase(),
+                                      )),
+                                ],
+                              ],
                             ),
             ),
+
             // Footer Action
             Padding(
               padding: const EdgeInsets.all(16.0),
@@ -2056,6 +2505,126 @@ class _AssignStaffBottomSheetState extends State<_AssignStaffBottomSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildWorkerTile({
+    required int userId,
+    required String title,
+    required String designation,
+    String? skills,
+    String? phone,
+    required bool isRecommended,
+    required Color badgeColor,
+    required String badgeText,
+    bool isMarketplace = false,
+    double? hourlyRate,
+  }) {
+    final isSelected = userId == _selectedUserId;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFFEFF6FF) : const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+          width: isSelected ? 1.5 : 1,
+        ),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        leading: CircleAvatar(
+          backgroundColor: isSelected
+              ? const Color(0xFF2563EB)
+              : (isMarketplace
+                  ? const Color(0xFFFFF7ED)
+                  : (isRecommended ? const Color(0xFFECFDF5) : const Color(0xFFF3F4F6))),
+          child: Icon(
+            isMarketplace
+                ? Icons.handyman
+                : (isRecommended ? Icons.build_circle : Icons.person),
+            color: isSelected
+                ? Colors.white
+                : (isMarketplace
+                    ? const Color(0xFFFF6B00)
+                    : (isRecommended ? const Color(0xFF059669) : const Color(0xFF4B5563))),
+            size: 20,
+          ),
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  color: const Color(0xFF111827),
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                badgeText,
+                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: badgeColor),
+              ),
+            ),
+          ],
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                designation,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF374151)),
+              ),
+              if (skills != null && skills.isNotEmpty && skills != designation)
+                Text(
+                  'Skills: $skills',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              Row(
+                children: [
+                  if (phone != null && phone.isNotEmpty)
+                    Text(
+                      '📞 $phone',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                    ),
+                  if (hourlyRate != null && hourlyRate > 0) ...[
+                    if (phone != null && phone.isNotEmpty)
+                      const Text(' • ', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11)),
+                    Text(
+                      '₹${hourlyRate.toStringAsFixed(0)}/hr',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF059669)),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+        trailing: Icon(
+          isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+          color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFD1D5DB),
+        ),
+        onTap: () {
+          setState(() {
+            _selectedUserId = userId;
+          });
+        },
       ),
     );
   }

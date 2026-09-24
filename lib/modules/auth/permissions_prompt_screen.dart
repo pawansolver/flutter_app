@@ -48,7 +48,8 @@ class _PermissionsPromptScreenState extends State<PermissionsPromptScreen> {
         ],
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,7 +86,7 @@ class _PermissionsPromptScreenState extends State<PermissionsPromptScreen> {
                   height: 1.5,
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               // Permissions Cards
               _buildPermissionCard(
@@ -97,7 +98,7 @@ class _PermissionsPromptScreenState extends State<PermissionsPromptScreen> {
                 isGranted: _locationGranted,
                 onToggle: (val) => setState(() => _locationGranted = val),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               _buildPermissionCard(
                 icon: Icons.notifications_active_rounded,
                 iconColor: _brandGreen,
@@ -107,7 +108,7 @@ class _PermissionsPromptScreenState extends State<PermissionsPromptScreen> {
                 isGranted: _notificationsGranted,
                 onToggle: (val) => setState(() => _notificationsGranted = val),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               _buildPermissionCard(
                 icon: Icons.camera_alt_rounded,
                 iconColor: const Color(0xFF3B82F6),
@@ -117,41 +118,42 @@ class _PermissionsPromptScreenState extends State<PermissionsPromptScreen> {
                 isGranted: _cameraGranted,
                 onToggle: (val) => setState(() => _cameraGranted = val),
               ),
-
-              const Spacer(),
-
-              // Complete / Continue Button
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: _finishPermissions,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _brandGreen,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Continue to Home',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward, size: 20),
-                    ],
-                  ),
-                ),
-              ),
               const SizedBox(height: 16),
             ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(left: 24.0, right: 24.0, bottom: 16.0, top: 8.0),
+          child: SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton(
+              onPressed: _finishPermissions,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _brandGreen,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Continue to Home',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(Icons.arrow_forward, size: 20),
+                ],
+              ),
+            ),
           ),
         ),
       ),

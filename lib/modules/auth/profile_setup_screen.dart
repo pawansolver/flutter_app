@@ -6,6 +6,9 @@ import '../../core/api_config.dart';
 import '../../services/authenticated_dio.dart';
 import '../../shared/permission_guidance.dart';
 import 'permissions_prompt_screen.dart';
+import '../society/select_society_screen.dart';
+import '../../models/society_models.dart';
+import '../../services/society_service.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   final String? initialRole;
@@ -21,6 +24,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   String _locationStatus = '';
   bool _isLoadingLocation = false;
   bool _isSubmitting = false;
+
+  SocietyProfileModel? _selectedSociety;
+  String? _selectedFlatNo;
+  String? _selectedResidencyType;
 
   double? _latitude;
   double? _longitude;
@@ -303,6 +310,19 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         '${ApiConfig.baseUrl}/user-profile/complete-setup',
         data: data,
       );
+
+      // If resident selected a society, submit the join request
+      if (_selectedSociety != null && _selectedRole.toLowerCase() == 'resident') {
+        try {
+          await SocietyService().joinSociety(
+            _selectedSociety!.id,
+            flatNo: _selectedFlatNo,
+            role: _selectedResidencyType,
+          );
+        } catch (socErr) {
+          debugPrint('Failed to join society during setup: $socErr');
+        }
+      }
 
       if (response.statusCode == 200 && mounted) {
         Navigator.pushReplacement(
@@ -796,8 +816,30 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     );
   }
 
+  void _openSocietyPicker() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SelectSocietyScreen(
+          isModal: true,
+          onSocietySelected: (soc, flatNo, role) {
+            setState(() {
+              _selectedSociety = soc;
+              _selectedFlatNo = flatNo;
+              _selectedResidencyType = role;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
   // --- Resident Form ---
   Widget _buildResidentForm() {
+    const Color brandGreen = Color(0xFF10B981);
+    const Color primaryText = Color(0xFF111827);
+    const Color subText = Color(0xFF6B7280);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -813,6 +855,89 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           subtitle: 'Tap to detect your live GPS location',
           loadingText: 'Fetching GPS coordinates...',
           resultText: '',
+        ),
+        const SizedBox(height: 24),
+        GestureDetector(
+          onTap: _openSocietyPicker,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _selectedSociety != null ? brandGreen : brandGreen.withValues(alpha: 0.3),
+                width: _selectedSociety != null ? 1.5 : 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: brandGreen.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: brandGreen,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _selectedSociety != null ? Icons.apartment_rounded : Icons.add_home_work_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedSociety != null
+                            ? _selectedSociety!.societyName
+                            : 'Select Housing Society (Optional)',
+                        style: const TextStyle(
+                          color: primaryText,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _selectedSociety != null
+                            ? 'Flat: ${_selectedFlatNo ?? "Not specified"} • ${_selectedResidencyType ?? "Member"}'
+                            : 'Choose your society & flat to access gate security, visitors & notices',
+                        style: const TextStyle(
+                          color: subText,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  _selectedSociety != null ? Icons.check_circle : Icons.arrow_forward_ios,
+                  color: brandGreen,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );

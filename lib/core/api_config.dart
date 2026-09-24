@@ -16,7 +16,7 @@ class ApiConfig {
   /// Local Machine Wi-Fi IP (current IP: 192.168.31.15)
   static const String localLanIp = '192.168.31.15';
   static const int localPort = 5000;
-
+ 
   static const String _configuredUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: '',
@@ -321,6 +321,11 @@ class ApiConfig {
   static String assignSocietyComplaint(int id) =>
       "$baseUrl/society-complaint/$id/assign";
 
+  // Society Workers (Authorized Technicians & Service Providers)
+  static String get societyWorkers => "$baseUrl/society-worker";
+  static String societyWorkerEligible(int societyId, {String? category}) =>
+      "$baseUrl/society-worker/eligible?society_id=$societyId${category != null && category.isNotEmpty ? '&category=${Uri.encodeComponent(category)}' : ''}";
+
   // Complaint Masters
   static String get complaintCategories => "$baseUrl/complaint-categories";
   static String get complaintSubCategories => "$baseUrl/complaint-sub-categories";
@@ -345,6 +350,52 @@ class ApiConfig {
   static String societyVisitor(int id) => "$baseUrl/society-visitor/$id";
   static String societyVisitorStatus(int id) =>
       "$baseUrl/society-visitor/$id/status";
+
+  // Enterprise Security & Delegated Committees
+  static String get societyCommittees => "$baseUrl/society-committees";
+  static String societyCommittee(int id) => "$baseUrl/society-committees/$id";
+  static String societyCommitteeMembers(int id) => "$baseUrl/society-committees/$id/members";
+  static String societyCommitteeMember(int id, int userId) => "$baseUrl/society-committees/$id/members/$userId";
+  static String societyCommitteePermissions(int id) => "$baseUrl/society-committees/$id/permissions";
+  static String get searchCommitteeUsers => "$baseUrl/society-committees/search-users";
+  static String get societyCommitteeInvitations => "$baseUrl/society-committees/my-invitations";
+  static String get societyMyCommitteeMemberships => "$baseUrl/society-committees/my-memberships";
+  static String societyCommitteeInvitation(int id) => "$baseUrl/society-committees/invitations/$id";
+  static String acceptCommitteeInvitation(int id) => "$baseUrl/society-committees/invitations/$id/accept";
+  static String rejectCommitteeInvitation(int id) => "$baseUrl/society-committees/invitations/$id/reject";
+  static String resendCommitteeInvitation(int id) => "$baseUrl/society-committees/invitations/$id/resend";
+  static String cancelCommitteeInvitation(int id) => "$baseUrl/society-committees/invitations/$id/cancel";
+  static String suspendCommitteeMember(int committeeId, int userId) => "$baseUrl/society-committees/$committeeId/members/$userId/suspend";
+  static String revokeCommitteeMember(int committeeId, int userId) => "$baseUrl/society-committees/$committeeId/members/$userId/revoke";
+  static String activateCommitteeMember(int committeeId, int userId) => "$baseUrl/society-committees/$committeeId/members/$userId/activate";
+  static String get societyCommitteeCatalog => "$baseUrl/society-committees/catalog";
+  static String societyCommitteeCatalogForSociety(int societyId) => "$baseUrl/societies/$societyId/committee-permissions/catalog";
+
+  // Society Gates
+  static String get societyGates => "$baseUrl/society-gates";
+  static String societyGate(int id) => "$baseUrl/society-gates/$id";
+
+  // Society Shifts
+  static String get societyShifts => "$baseUrl/society-shifts";
+  static String societyShift(int id) => "$baseUrl/society-shifts/$id";
+
+  // Society Guards & Authorizations
+  static String get societyGuards => "$baseUrl/society-guards";
+  static String societyGuard(int id) => "$baseUrl/society-guards/$id";
+  static String societyGuardStatus(int id) => "$baseUrl/society-guards/$id/status";
+  static String get societyGuardAssign => "$baseUrl/society-guards/assign";
+  static String get societyGuardDuty => "$baseUrl/society-guards/my-duty";
+  static String societyGuardPhoto(int id) => "$baseUrl/society-guards/$id/photo";
+  static String get societyGuardUploadPhoto => "$baseUrl/society-guards/photo";
+  static String societyGuardIdDocument(int id) => "$baseUrl/society-guards/$id/id-document";
+  static String get societyGuardUploadIdDocument => "$baseUrl/society-guards/id-document";
+  static String societyGuardVerify(int id) => "$baseUrl/society-guards/$id/verify";
+  static String societyGuardReject(int id) => "$baseUrl/society-guards/$id/reject-verification";
+
+  // Security Dashboard, Reports & Audits
+  static String get societySecurityDashboard => "$baseUrl/society-security/dashboard";
+  static String get societySecurityReports => "$baseUrl/society-security/reports";
+  static String get societySecurityAuditLogs => "$baseUrl/society-security/audit-logs";
 
   // Society Documents (PRD 18.4)
   static String get societyDocuments => "$baseUrl/society-document";

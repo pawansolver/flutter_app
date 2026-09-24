@@ -10,16 +10,58 @@ import '../modules/services/screens/my_service_bookings_screen.dart';
 import '../modules/business/screens/business_listings_screen.dart';
 import '../modules/business/screens/business_dashboard_screen.dart';
 import '../modules/settings/settings_screen.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../shared/widgets/role_switch_sheet.dart';
 import '../services/auth_service.dart';
+import '../services/auth_session.dart';
 
-class CustomDrawer extends StatelessWidget {
+class CustomDrawer extends StatefulWidget {
   const CustomDrawer({super.key});
+
+  @override
+  State<CustomDrawer> createState() => _CustomDrawerState();
+}
+
+class _CustomDrawerState extends State<CustomDrawer> {
+  String _userRole = 'resident';
+  String _userName = 'smartgali User';
+  String _userLocation = 'Patna, Bihar';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserSession();
+  }
+
+  Future<void> _loadUserSession() async {
+    try {
+      final authStore = AuthSessionStore();
+      final role = await authStore.readUserRole();
+      final activeRole = await const FlutterSecureStorage().read(key: 'active_role');
+      final resolvedRole = (activeRole ?? role ?? 'resident').toLowerCase().trim();
+
+      final profile = await AuthService().getAuthProfile().catchError((_) => <String, dynamic>{});
+      if (mounted) {
+        setState(() {
+          _userRole = resolvedRole;
+          final name = profile['name'] ?? profile['fullName'] ?? profile['userName'];
+          if (name != null && name.toString().isNotEmpty) {
+            _userName = name.toString();
+          }
+          final loc = profile['address'] ?? profile['societyName'] ?? profile['location'];
+          if (loc != null && loc.toString().isNotEmpty) {
+            _userLocation = loc.toString();
+          }
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
     const Color bgColor = Color(0xFFEBF3EA);
     const Color sectionHeaderColor = Color(0xFF90A490);
+    final isProvider = _userRole == 'provider' || _userRole == 'service provider';
 
     return Drawer(
       backgroundColor: bgColor,
@@ -96,32 +138,32 @@ class CustomDrawer extends StatelessWidget {
                             ), // Prevent overlap with Verified badge
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
+                              children: [
                                 Text(
-                                  'Pawan Kumar',
+                                  _userName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w600,
                                     color: Color(0xFF1F2937),
                                   ),
                                 ),
-                                SizedBox(height: 4),
+                                const SizedBox(height: 4),
                                 Row(
                                   children: [
-                                    Icon(
+                                    const Icon(
                                       Icons.location_on,
                                       color: Color(0xFFF59E0B),
                                       size: 14,
                                     ),
-                                    SizedBox(width: 4),
+                                    const SizedBox(width: 4),
                                     Expanded(
                                       child: Text(
-                                        'Boring Road, Patna',
+                                        _userLocation,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
+                                        style: const TextStyle(
                                           fontSize: 13,
                                           color: Color(0xFF4B5563),
                                         ),
@@ -153,15 +195,15 @@ class CustomDrawer extends StatelessWidget {
                             Container(
                               width: 6,
                               height: 6,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF4CAF50),
+                              decoration: BoxDecoration(
+                                color: isProvider ? const Color(0xFFFF6B00) : const Color(0xFF4CAF50),
                                 shape: BoxShape.circle,
                               ),
                             ),
                             const SizedBox(width: 4),
-                            const Text(
-                              'Verified',
-                              style: TextStyle(
+                            Text(
+                              isProvider ? 'Provider' : 'Verified',
+                              style: const TextStyle(
                                 fontSize: 10,
                                 color: Color(0xFF4B5563),
                                 fontWeight: FontWeight.w500,
@@ -182,6 +224,33 @@ class CustomDrawer extends StatelessWidget {
                 physics: const BouncingScrollPhysics(),
                 children: [
                   _buildSectionHeader('MAIN', sectionHeaderColor),
+                  if (isProvider)
+                    _buildMenuItem(
+                      icon: Icons.handyman_outlined,
+                      title: 'Provider Center',
+                      isSelected:
+                          context
+                              .findAncestorWidgetOfExactType<
+                                ProviderDashboardScreen
+                              >() !=
+                          null,
+                      onTap: () {
+                        final isCurrent =
+                            context.findAncestorWidgetOfExactType<
+                              ProviderDashboardScreen
+                            >() !=
+                            null;
+                        Navigator.pop(context);
+                        if (!isCurrent) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ProviderDashboardScreen(),
+                            ),
+                          );
+                        }
+                      },
+                    ),
                   _buildMenuItem(
                     icon: Icons.campaign_outlined,
                     title: 'Society Dashboard',

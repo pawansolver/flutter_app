@@ -24,7 +24,10 @@ import '../society/complaint_detail_screen.dart';
 import '../society/parking_screen.dart';
 import '../society/society_dashboard_screen.dart';
 import '../society/society_emergency_contacts_screen.dart';
+import '../society/society_members_screen.dart';
 import '../society/society_operations_screen.dart';
+import '../society/committee_invitation_screen.dart';
+import '../society/society_committee_workspace_screen.dart';
 import 'notification_service.dart';
 import 'widgets/notification_card.dart';
 
@@ -620,20 +623,135 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     }
   }
 
-  Future<void> _respondToCommunityInvitation(
+  Future<void> _respondToInvitation(
     AppNotification notification,
     String action,
   ) async {
-    final communityId = int.tryParse(
-      notification.data?['communityId']?.toString() ?? '',
+    final data = notification.data ?? {};
+
+    int? invitationId = int.tryParse(
+      data['invitationId']?.toString() ??
+      data['committeeMemberId']?.toString() ??
+      data['memberId']?.toString() ??
+      data['id']?.toString() ??
+      '',
     );
-    final invitationId = int.tryParse(
-      notification.data?['invitationId']?.toString() ?? '',
+
+    int? societyId = int.tryParse(
+      data['societyId']?.toString() ??
+      data['society_id']?.toString() ??
+      '',
     );
-    if (communityId == null || invitationId == null) {
-      _showSnack('This invitation is missing required details.');
+
+    // Fallback extraction from target path (e.g. /society/69/committees/43/invitations/49)
+    final targetStr = data['target']?.toString() ?? '';
+    if (targetStr.isNotEmpty) {
+      if (societyId == null || societyId <= 0) {
+        final socMatch = RegExp(r'/society/(\d+)').firstMatch(targetStr);
+        if (socMatch != null) societyId = int.tryParse(socMatch.group(1)!);
+      }
+      if (invitationId == null || invitationId <= 0) {
+        final invMatch = RegExp(r'/invitations/(\d+)').firstMatch(targetStr);
+        if (invMatch != null) invitationId = int.tryParse(invMatch.group(1)!);
+      }
+    }
+
+    // 1. Check if this is a Society Committee invitation
+    final isCommittee = (societyId != null && societyId > 0) ||
+        notification.type == 'society_committee' ||
+        data['action'] == 'committee_invitation' ||
+        data['committeeId'] != null;
+
+    debugPrint('[Notification] Responding to invitation: isCommittee=$isCommittee, invitationId=$invitationId, societyId=$societyId, action=$action');
+
+    if (isCommittee) {
+      if (invitationId == null || invitationId <= 0) {
+        _showSnack('Committee invitation ID is missing.');
+        return;
+      }
+      if (societyId == null || societyId <= 0) {
+        _showSnack('Committee society ID is missing.');
+        return;
+      }
+
+      if (action == 'decline') {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Decline Invitation?'),
+            content: const Text(
+              'Are you sure you want to decline this committee appointment? You can only join later if the administrator re-invites you.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Decline'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !mounted) return;
+
+        try {
+          await SocietyService().rejectCommitteeInvitation(invitationId, societyId);
+          if (!mounted) return;
+          await _service.markRead(notification.id);
+          if (!mounted) return;
+          setState(() {
+            _all.removeWhere((item) => item.id == notification.id);
+            if (!notification.isRead && _unreadCount > 0) _unreadCount -= 1;
+          });
+          _showSnack('Committee invitation declined.', isSuccess: true);
+        } catch (error) {
+          _showSnack('Failed to decline invitation: $error');
+        }
+        return;
+      }
+
+      // Accept Flow
+      try {
+        await SocietyService().acceptCommitteeInvitation(invitationId, societyId);
+        if (!mounted) return;
+        await _service.markRead(notification.id);
+        if (!mounted) return;
+        setState(() {
+          _all.removeWhere((item) => item.id == notification.id);
+          if (!notification.isRead && _unreadCount > 0) _unreadCount -= 1;
+        });
+        _showSnack(
+          'Committee invitation accepted! PBAC permissions are now active.',
+          isSuccess: true,
+        );
+
+        final committeeId = int.tryParse(data['committeeId']?.toString() ?? '');
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SocietyCommitteeWorkspaceScreen(
+              societyId: societyId!,
+              committeeId: committeeId,
+            ),
+          ),
+        );
+      } catch (error) {
+        _showSnack('Failed to accept invitation: $error');
+      }
       return;
     }
+
+    // 2. Community Invitation Flow
+    final communityId = int.tryParse(data['communityId']?.toString() ?? '');
+    if (communityId == null || invitationId == null) {
+      _showSnack('Community invitation details are missing (communityId: $communityId, invitationId: $invitationId).');
+      return;
+    }
+
     try {
       await CommunityService().respondToInvitation(
         communityId,
@@ -825,24 +943,31 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
         // 7. Society Complaints
         case 'society_complaint':
-          final societyId = int.tryParse(data['societyId']?.toString() ?? '');
-          final complaintId = int.tryParse(data['complaintId']?.toString() ?? '');
+          final complaintId = notif.resolvedComplaintId ?? int.tryParse(data['complaintId']?.toString() ?? '');
+          final societyId = int.tryParse(data['societyId']?.toString() ?? '') ?? 0;
           if (complaintId != null && complaintId > 0) {
             try {
-              final complaint = await SocietyService().getComplaint(complaintId, societyId ?? 0);
+              final complaint = await SocietyService().getComplaint(complaintId, societyId);
+              if (!mounted) return;
+              final currentUserId = await AuthService().getUserId();
+              final isWorker = currentUserId != null && complaint.assignedTo == currentUserId;
               if (!mounted) return;
               await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => ComplaintDetailScreen(
                     complaint: complaint,
-                    userRole: 'resident',
+                    userRole: isWorker ? 'worker' : 'resident',
                   ),
                 ),
               );
               return;
-            } catch (_) {
-              // Fallback to operations complaints tab
+            } catch (e) {
+              debugPrint('Failed to open complaint detail: $e');
+              if (mounted) {
+                _showSnack('Unable to load complaint details: $e');
+              }
+              return;
             }
           }
           if (!mounted) return;
@@ -925,7 +1050,77 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           );
           return;
 
-        // 13. General Society Dashboard
+        // 13. Society Committee Appointment / Invitation
+        case 'society_committee_invitation':
+        case 'society_committee':
+          int? invitationId = int.tryParse(
+            data['invitationId']?.toString() ??
+            data['committeeMemberId']?.toString() ??
+            data['memberId']?.toString() ??
+            data['id']?.toString() ??
+            '',
+          );
+          int? societyId = int.tryParse(
+            data['societyId']?.toString() ??
+            data['society_id']?.toString() ??
+            '',
+          );
+          final targetPath = data['target']?.toString() ?? '';
+          if (societyId == null || societyId <= 0) {
+            final socMatch = RegExp(r'/society/(\d+)').firstMatch(targetPath);
+            if (socMatch != null) societyId = int.tryParse(socMatch.group(1)!);
+          }
+          if (invitationId == null || invitationId <= 0) {
+            final invMatch = RegExp(r'/invitations/(\d+)').firstMatch(targetPath);
+            if (invMatch != null) invitationId = int.tryParse(invMatch.group(1)!);
+          }
+
+          if (invitationId != null && invitationId > 0 && societyId != null && societyId > 0) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CommitteeInvitationScreen(
+                  invitationId: invitationId!,
+                  societyId: societyId!,
+                ),
+              ),
+            );
+            return;
+          }
+          final committeeId = int.tryParse(data['committeeId']?.toString() ?? '');
+          if (societyId != null && societyId > 0) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SocietyCommitteeWorkspaceScreen(
+                  societyId: societyId!,
+                  committeeId: committeeId,
+                ),
+              ),
+            );
+            return;
+          }
+          break;
+
+        // 14. Society Member Join Request (Admin / Committee Approval)
+        case 'society_member_join':
+          final societyId = int.tryParse(data['societyId']?.toString() ?? '');
+          if (societyId != null && societyId > 0) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SocietyMembersScreen(
+                  societyId: societyId,
+                  userRole: 'admin',
+                  initialTab: 1, // Open Pending Tab directly!
+                ),
+              ),
+            );
+            return;
+          }
+          break;
+
+        // 14. General Society Dashboard
         case 'society':
           final societyId = int.tryParse(data['societyId']?.toString() ?? '');
           await Navigator.push(
@@ -1351,10 +1546,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
               onToggleRead: () => _toggleReadStatus(notif),
               onDelete: () => _deleteNotification(notif),
               onAcceptInvitation: notif.data?['invitationId'] != null
-                  ? () => _respondToCommunityInvitation(notif, 'accept')
+                  ? () => _respondToInvitation(notif, 'accept')
                   : null,
               onDeclineInvitation: notif.data?['invitationId'] != null
-                  ? () => _respondToCommunityInvitation(notif, 'decline')
+                  ? () => _respondToInvitation(notif, 'decline')
                   : null,
             );
           },

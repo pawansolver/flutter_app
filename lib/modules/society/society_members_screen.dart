@@ -5,11 +5,13 @@ import '../../services/society_service.dart';
 class SocietyMembersScreen extends StatefulWidget {
   final int societyId;
   final String userRole; // 'admin' | 'committee' | 'resident'
+  final int initialTab;
 
   const SocietyMembersScreen({
     super.key,
     required this.societyId,
     required this.userRole,
+    this.initialTab = 0,
   });
 
   @override
@@ -33,7 +35,9 @@ class _SocietyMembersScreenState extends State<SocietyMembersScreen> with Single
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _canManage ? 2 : 1, vsync: this);
+    final tabCount = _canManage ? 2 : 1;
+    final initialIdx = (widget.initialTab == 1 && _canManage) ? 1 : 0;
+    _tabController = TabController(length: tabCount, vsync: this, initialIndex: initialIdx);
     _loadMembers();
   }
 
@@ -108,26 +112,148 @@ class _SocietyMembersScreenState extends State<SocietyMembersScreen> with Single
   }
 
   Future<void> _changeMemberRole(SocietyMemberModel member) async {
-    String selectedRole = member.role;
-    final roles = ['resident', 'committee', 'security'];
+    String selectedRole = member.role.toLowerCase() == 'security' ? 'staff' : member.role;
+    if (!['admin', 'committee', 'staff', 'member'].contains(selectedRole)) {
+      selectedRole = 'member';
+    }
+    String selectedPortfolio = member.remark ?? '🛡️ Security & Gate Head (Guard In-Charge)';
+    final customPortfolioCtrl = TextEditingController(text: member.remark ?? '');
 
-    final updated = await showDialog<String>(
+    final portfolioPresets = [
+      '🛡️ Security & Gate Head (Guard In-Charge)',
+      '🌳 Garden & Amenities Head',
+      '🔧 Maintenance & Complaints Head',
+      '📢 Cultural & Events Head',
+      '📋 General Committee Member',
+      '✏️ Custom Portfolio...',
+    ];
+
+    bool isCustom = !portfolioPresets.any((p) => p.contains(member.remark ?? '___xyz___')) &&
+        (member.remark != null && member.remark!.isNotEmpty);
+    if (isCustom) {
+      selectedPortfolio = '✏️ Custom Portfolio...';
+    } else {
+      final match = portfolioPresets.firstWhere(
+        (p) => p.contains(member.remark ?? ''),
+        orElse: () => portfolioPresets[0],
+      );
+      selectedPortfolio = match;
+    }
+
+    final updated = await showDialog<Map<String, String?>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
-          title: Text('Change Role: ${member.userName}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: roles.map((r) {
-              return RadioListTile<String>(
-                title: Text(r.toUpperCase()),
-                value: r,
-                groupValue: selectedRole,
-                onChanged: (val) {
-                  if (val != null) setModalState(() => selectedRole = val);
-                },
-              );
-            }).toList(),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.admin_panel_settings_outlined, color: Color(0xFF10B981)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Assign Role & Duties: ${member.userName}',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Select Role:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                RadioListTile<String>(
+                  title: const Text('Committee Member', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Manage society, guards, complaints, or amenities'),
+                  value: 'committee',
+                  groupValue: selectedRole,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (val) {
+                    if (val != null) setModalState(() => selectedRole = val);
+                  },
+                ),
+                if (selectedRole == 'committee') ...[
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, bottom: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Assigned Portfolio / Head Area:',
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF059669))),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              isExpanded: true,
+                              value: selectedPortfolio,
+                              items: portfolioPresets.map((p) {
+                                return DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 12)));
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setModalState(() {
+                                    selectedPortfolio = val;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                        if (selectedPortfolio == '✏️ Custom Portfolio...') ...[
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: customPortfolioCtrl,
+                            decoration: InputDecoration(
+                              hintText: 'e.g. Parking & Traffic In-Charge',
+                              labelText: 'Custom Portfolio Name',
+                              isDense: true,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+                RadioListTile<String>(
+                  title: const Text('Security Guard (Gate Staff)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Visitor Check-in/out and gate control duties'),
+                  value: 'staff',
+                  groupValue: selectedRole,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (val) {
+                    if (val != null) setModalState(() => selectedRole = val);
+                  },
+                ),
+                RadioListTile<String>(
+                  title: const Text('Resident (Flat Member)'),
+                  subtitle: const Text('Normal flat resident with visitor approvals'),
+                  value: 'member',
+                  groupValue: selectedRole,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (val) {
+                    if (val != null) setModalState(() => selectedRole = val);
+                  },
+                ),
+                RadioListTile<String>(
+                  title: const Text('Society Admin'),
+                  subtitle: const Text('Full society management access'),
+                  value: 'admin',
+                  groupValue: selectedRole,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (val) {
+                    if (val != null) setModalState(() => selectedRole = val);
+                  },
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -135,21 +261,47 @@ class _SocietyMembersScreenState extends State<SocietyMembersScreen> with Single
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, selectedRole),
-              child: const Text('Update'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                String? finalRemark;
+                if (selectedRole == 'committee') {
+                  if (selectedPortfolio == '✏️ Custom Portfolio...') {
+                    finalRemark = customPortfolioCtrl.text.trim();
+                  } else {
+                    // Extract clean name without emoji
+                    finalRemark = selectedPortfolio.replaceAll(RegExp(r'^[^\w]+'), '').trim();
+                  }
+                }
+                Navigator.pop(ctx, {
+                  'role': selectedRole,
+                  'remark': finalRemark,
+                });
+              },
+              child: const Text('Save & Assign'),
             ),
           ],
         ),
       ),
     );
 
-    if (updated != null && updated != member.role) {
+    if (updated != null) {
       try {
-        await _societyService.updateMemberRole(member.id, widget.societyId, role: updated);
+        await _societyService.updateMemberRole(
+          member.id,
+          widget.societyId,
+          role: updated['role']!,
+          remark: updated['remark'],
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Updated role to ${updated.toUpperCase()}'),
+              content: Text(
+                'Updated role to ${updated['role']!.toUpperCase()}'
+                '${updated['remark'] != null && updated['remark']!.isNotEmpty ? ' (${updated['remark']})' : ''}',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -201,14 +353,26 @@ class _SocietyMembersScreenState extends State<SocietyMembersScreen> with Single
     }
   }
 
+  String _selectedRoleFilter = 'all';
+
   List<SocietyMemberModel> get _filteredActiveMembers {
-    if (_searchQuery.trim().isEmpty) return _activeMembers;
+    var list = _activeMembers;
+    if (_selectedRoleFilter == 'committee') {
+      list = list.where((m) => m.isCommittee).toList();
+    } else if (_selectedRoleFilter == 'guard') {
+      list = list.where((m) => m.isStaff || m.isSecurity).toList();
+    } else if (_selectedRoleFilter == 'resident') {
+      list = list.where((m) => !m.isAdmin && !m.isCommittee && !m.isStaff && !m.isSecurity).toList();
+    }
+
+    if (_searchQuery.trim().isEmpty) return list;
     final q = _searchQuery.trim().toLowerCase();
-    return _activeMembers.where((m) {
+    return list.where((m) {
       final name = m.userName.toLowerCase();
       final flat = (m.flatNo ?? '').toLowerCase();
       final role = m.role.toLowerCase();
-      return name.contains(q) || flat.contains(q) || role.contains(q);
+      final portfolio = m.portfolio.toLowerCase();
+      return name.contains(q) || flat.contains(q) || role.contains(q) || portfolio.contains(q);
     }).toList();
   }
 
@@ -261,16 +425,20 @@ class _SocietyMembersScreenState extends State<SocietyMembersScreen> with Single
   Widget _buildActiveMembersList() {
     final list = _filteredActiveMembers;
 
+    final committeeCount = _activeMembers.where((m) => m.isCommittee).length;
+    final guardCount = _activeMembers.where((m) => m.isStaff || m.isSecurity).length;
+    final residentCount = _activeMembers.where((m) => !m.isAdmin && !m.isCommittee && !m.isStaff && !m.isSecurity).length;
+
     return RefreshIndicator(
       onRefresh: _loadMembers,
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search members by name, flat, role...',
+                hintText: 'Search members by name, flat, portfolio...',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
@@ -289,6 +457,22 @@ class _SocietyMembersScreenState extends State<SocietyMembersScreen> with Single
               onChanged: (val) => setState(() => _searchQuery = val),
             ),
           ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Row(
+              children: [
+                _buildFilterChip('All (${_activeMembers.length})', 'all'),
+                const SizedBox(width: 8),
+                _buildFilterChip('🛡️ Committee ($committeeCount)', 'committee'),
+                const SizedBox(width: 8),
+                _buildFilterChip('👮 Guards ($guardCount)', 'guard'),
+                const SizedBox(width: 8),
+                _buildFilterChip('🏠 Residents ($residentCount)', 'resident'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
           Expanded(
             child: list.isEmpty
                 ? const Center(child: Text('No members found', style: TextStyle(color: Colors.grey)))
@@ -300,7 +484,29 @@ class _SocietyMembersScreenState extends State<SocietyMembersScreen> with Single
                       final m = list[index];
                       return ListTile(
                         leading: CircleAvatar(
-                          child: Text(m.userName.isNotEmpty ? m.userName[0].toUpperCase() : 'U'),
+                          backgroundColor: m.isCommittee
+                              ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                              : m.isStaff || m.isSecurity
+                                  ? const Color(0xFFFF6B00).withValues(alpha: 0.15)
+                                  : m.isAdmin
+                                      ? Colors.indigo.withValues(alpha: 0.15)
+                                      : Colors.grey.shade200,
+                          child: Icon(
+                            m.isCommittee
+                                ? Icons.verified_user_outlined
+                                : m.isStaff || m.isSecurity
+                                    ? Icons.security
+                                    : m.isAdmin
+                                        ? Icons.admin_panel_settings
+                                        : Icons.person_outline,
+                            color: m.isCommittee
+                                ? const Color(0xFF059669)
+                                : m.isStaff || m.isSecurity
+                                    ? const Color(0xFFFF6B00)
+                                    : m.isAdmin
+                                        ? Colors.indigo
+                                        : Colors.grey.shade700,
+                          ),
                         ),
                         title: Row(
                           children: [
@@ -309,18 +515,25 @@ class _SocietyMembersScreenState extends State<SocietyMembersScreen> with Single
                                 m.userName,
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                                 overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            _buildRoleBadge(m.role),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: _buildRoleBadge(m),
+                            ),
                           ],
                         ),
                         subtitle: Text(
                           [
                             if (m.flatNo != null && m.flatNo!.isNotEmpty) 'Flat: ${m.flatNo}',
-                            if (m.userEmail.isNotEmpty) m.userEmail,
+                            if (m.portfolio.isNotEmpty) 'Duties: ${m.portfolio}',
+                            if (m.userPhone.isNotEmpty) 'Phone: ${m.userPhone}',
                           ].join(' • '),
                           style: const TextStyle(fontSize: 12),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         trailing: _isAdmin && m.role.toLowerCase() != 'admin'
                             ? PopupMenuButton<String>(
@@ -338,7 +551,7 @@ class _SocietyMembersScreenState extends State<SocietyMembersScreen> with Single
                                       children: [
                                         Icon(Icons.edit, size: 18),
                                         SizedBox(width: 8),
-                                        Text('Change Role'),
+                                        Text('Assign Role / Duties'),
                                       ],
                                     ),
                                   ),
@@ -360,6 +573,23 @@ class _SocietyMembersScreenState extends State<SocietyMembersScreen> with Single
                   ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, String value) {
+    final isSelected = _selectedRoleFilter == value;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) {
+        setState(() => _selectedRoleFilter = value);
+      },
+      selectedColor: const Color(0xFF10B981).withValues(alpha: 0.2),
+      labelStyle: TextStyle(
+        fontSize: 12,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        color: isSelected ? const Color(0xFF059669) : Colors.black87,
       ),
     );
   }
@@ -422,26 +652,40 @@ class _SocietyMembersScreenState extends State<SocietyMembersScreen> with Single
     );
   }
 
-  Widget _buildRoleBadge(String role) {
+  Widget _buildRoleBadge(SocietyMemberModel m) {
     Color color = Colors.blueGrey;
-    if (role.toLowerCase() == 'admin' || role.toLowerCase() == 'owner') {
+    String label = m.role.toUpperCase();
+
+    if (m.isAdmin) {
       color = Colors.indigo;
-    } else if (role.toLowerCase() == 'committee') {
-      color = Colors.teal;
-    } else if (role.toLowerCase() == 'security') {
-      color = Colors.orange;
+      label = 'ADMIN';
+    } else if (m.isCommittee) {
+      color = const Color(0xFF059669);
+      if (m.portfolio.isNotEmpty) {
+        label = 'COMMITTEE • ${m.portfolio.toUpperCase()}';
+      } else {
+        label = 'COMMITTEE';
+      }
+    } else if (m.isStaff || m.isSecurity) {
+      color = const Color(0xFFFF6B00);
+      label = 'SECURITY GUARD';
+    } else if (m.role == 'member') {
+      color = Colors.blueGrey;
+      label = 'RESIDENT';
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Text(
-        role.toUpperCase(),
-        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+        label,
+        style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.bold),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
       ),
     );
   }

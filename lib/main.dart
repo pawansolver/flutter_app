@@ -7,26 +7,34 @@ import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   try {
     if (kIsWeb) {
-      // WEB ke liye yahan options dena zaroori hai!
-      // Firebase console se apni API keys yahan paste karein:
-      await Firebase.initializeApp(
-        options: const FirebaseOptions(
-          apiKey: "AIzaSyDFYJjIzQo_G82TBa6PPdSAwdwvoT-esRU",
-          appId: "1:362429067451:android:3501ae54175485aa6ff99e", // Web App ID Firebase Console se lana hoga
-          messagingSenderId: "362429067451",
-          projectId: "smartgali",
-          storageBucket: "smartgali.firebasestorage.app",
-        ),
-      );
+      // Web initialization: Firebase is optional and shouldn't block the UI
+      try {
+        await Firebase.initializeApp(
+          options: const FirebaseOptions(
+            apiKey: "AIzaSyDFYJjIzQo_G82TBa6PPdSAwdwvoT-esRU",
+            appId: "1:362429067451:android:3501ae54175485aa6ff99e",
+            messagingSenderId: "362429067451",
+            projectId: "smartgali",
+            storageBucket: "smartgali.firebasestorage.app",
+          ),
+        ).timeout(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('Firebase Web initialization skipped: $e');
+      }
+      // NotificationService uses mobile-only plugins (flutter_local_notifications)
+      // so it is skipped on web.
     } else {
-      // Android/iOS ke liye default (google-services.json se lega)
+      // Android / iOS
       await Firebase.initializeApp();
+      NotificationService().initialize().catchError((e) {
+        debugPrint('Notification service error: $e');
+      });
     }
-    await NotificationService().initialize();
   } catch (e) {
-    debugPrint('Firebase initialization failed: $e');
+    debugPrint('App initialization error: $e');
   }
 
   runApp(
@@ -40,36 +48,19 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      useInheritedMediaQuery: true,
       locale: DevicePreview.locale(context),
       builder: DevicePreview.appBuilder,
       title: 'SmartGali',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
       home: const SplashScreen(),
     );
   }
-
-
 }
 
 class MyHomePage extends StatefulWidget {

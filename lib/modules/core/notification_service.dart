@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/api_config.dart';
@@ -84,23 +85,45 @@ class AppNotification {
     if (raw != null && raw.isNotEmpty) {
       parsedDate = DateTime.tryParse(raw)?.toLocal();
     }
+    Map<String, dynamic>? parsedData;
+    if (json['data'] is Map) {
+      parsedData = Map<String, dynamic>.from(json['data'] as Map);
+    } else if (json['data'] is String && (json['data'] as String).trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(json['data'] as String);
+        if (decoded is Map) {
+          parsedData = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {}
+    }
+
     return AppNotification(
       id: int.tryParse(json['id'].toString()) ?? 0,
       title: (json['title'] ?? '').toString(),
       message: (json['message'] ?? '').toString(),
       type: (json['type'] ?? 'info').toString(),
-      data: json['data'] is Map
-          ? Map<String, dynamic>.from(json['data'] as Map)
-          : null,
+      data: parsedData,
       isRead: json['isRead'] == true,
       createdAt: parsedDate,
     );
+  }
+
+  /// Extracts complaint ID from data or title/message as a fallback
+  int? get resolvedComplaintId {
+    final cId = int.tryParse(data?['complaintId']?.toString() ?? '');
+    if (cId != null && cId > 0) return cId;
+    final match = RegExp(r'#?CMP-?0*(\d+)', caseSensitive: false).firstMatch('$title $message');
+    if (match != null && match.group(1) != null) {
+      return int.tryParse(match.group(1)!);
+    }
+    return null;
   }
 
   /// Returns the deep-link target type from the notification data payload.
   String? get deepLinkTarget {
     final target = data?['target']?.toString();
     if (target != null && target.isNotEmpty) {
+      if (target.contains('/committees/') || target.contains('/invitations/')) return 'society_committee_invitation';
       if (target.startsWith('/communities/')) return 'community';
       if (target.startsWith('/chat/')) return 'chat';
       if (target.startsWith('/post/')) return 'post';
@@ -115,11 +138,25 @@ class AppNotification {
     final titleLower = title.toLowerCase();
     final msgLower = message.toLowerCase();
 
+    // 0. Society Committee Invitations & Lifecycle
+    if (t == 'society_committee' ||
+        data?['action'] == 'committee_invitation' ||
+        (data?['committeeId'] != null && (data?['invitationId'] != null || data?['committeeMemberId'] != null)) ||
+        titleLower.contains('committee invitation') ||
+        titleLower.contains('assigned to committee') ||
+        msgLower.contains('invited to join') && msgLower.contains('committee')) {
+      return 'society_committee_invitation';
+    }
+
     // 1. Society Operations
     if (data?['complaintId'] != null ||
+        resolvedComplaintId != null ||
         titleLower.contains('complaint') ||
         msgLower.contains('complaint') ||
-        t.contains('complaint')) {
+        t.contains('complaint') ||
+        titleLower.contains('task assigned') ||
+        msgLower.contains('#cmp-') ||
+        msgLower.contains('assigned')) {
       return 'society_complaint';
     }
     if (data?['visitorId'] != null ||
@@ -140,6 +177,13 @@ class AppNotification {
         msgLower.contains('poll') ||
         t.contains('poll')) {
       return 'society_poll';
+    }
+    if (data?['memberId'] != null ||
+        titleLower.contains('member join') ||
+        titleLower.contains('join request') ||
+        msgLower.contains('join request') ||
+        msgLower.contains('review and approve')) {
+      return 'society_member_join';
     }
     if (data?['parkingId'] != null ||
         titleLower.contains('parking') ||

@@ -28,6 +28,8 @@ class _ResidentComplaintsScreenState extends State<ResidentComplaintsScreen> {
   String? _errorMessage;
   List<SocietyComplaintModel> _complaints = [];
   String _activeFilter = 'all'; // 'all', 'open', 'in_progress', 'resolved', 'closed'
+  bool _isManagement = false;
+  bool _showOnlyMyComplaints = true;
 
   @override
   void initState() {
@@ -44,13 +46,27 @@ class _ResidentComplaintsScreenState extends State<ResidentComplaintsScreen> {
     try {
       _resolvedSocietyId = await _societyService.resolveActiveSocietyId(widget.societyId);
       if (_resolvedSocietyId != null) {
+        SocietyProfileModel? soc;
         try {
-          final soc = await _societyService.getSocietyDetail(_resolvedSocietyId!);
+          soc = await _societyService.getSocietyDetail(_resolvedSocietyId!);
           _societyName = soc.name;
         } catch (_) {}
 
         try {
-          final userId = await AuthSessionStore().readUserId();
+          final sessionStore = AuthSessionStore();
+          final userId = await sessionStore.readUserId();
+          final userRole = await sessionStore.readUserRole();
+
+          if (userRole != null && userRole.toLowerCase() == 'admin') {
+            _isManagement = true;
+          }
+
+          if (soc != null && userId != null) {
+            if (soc.userId == userId || soc.createdBy == userId) {
+              _isManagement = true;
+            }
+          }
+
           if (userId != null) {
             final membersRes = await _societyService.getMembers(_resolvedSocietyId!, limit: 100);
             final me = membersRes.data.firstWhere(
@@ -63,6 +79,10 @@ class _ResidentComplaintsScreenState extends State<ResidentComplaintsScreen> {
                 status: 'active',
               ),
             );
+            final r = me.role.toLowerCase();
+            if (r == 'admin' || r == 'committee' || r == 'owner') {
+              _isManagement = true;
+            }
             if (me.id > 0 && me.flatNo != null && me.flatNo!.trim().isNotEmpty) {
               _registeredFlatNo = me.flatNo!.trim();
             }
@@ -99,10 +119,9 @@ class _ResidentComplaintsScreenState extends State<ResidentComplaintsScreen> {
     }
 
     try {
-      // Backend automatically scopes complaints to caller user for non-admin residents
       final res = await _societyService.getComplaints(
         _resolvedSocietyId!,
-        myOnly: true,
+        myOnly: _showOnlyMyComplaints,
         limit: 100,
       );
 
@@ -416,6 +435,39 @@ class _ResidentComplaintsScreenState extends State<ResidentComplaintsScreen> {
                         ),
                       ),
 
+                      // Management Scope Switcher (if Admin / Committee)
+                      if (_isManagement)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                            child: Row(
+                              children: [
+                                ChoiceChip(
+                                  label: const Text('My Complaints', style: TextStyle(fontSize: 12)),
+                                  selected: _showOnlyMyComplaints,
+                                  onSelected: (selected) {
+                                    if (selected && !_showOnlyMyComplaints) {
+                                      setState(() => _showOnlyMyComplaints = true);
+                                      _loadComplaints();
+                                    }
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                ChoiceChip(
+                                  label: const Text('All Society Complaints', style: TextStyle(fontSize: 12)),
+                                  selected: !_showOnlyMyComplaints,
+                                  onSelected: (selected) {
+                                    if (selected && _showOnlyMyComplaints) {
+                                      setState(() => _showOnlyMyComplaints = false);
+                                      _loadComplaints();
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
                       // Filter Bar
                       SliverToBoxAdapter(
                         child: SingleChildScrollView(
@@ -484,16 +536,38 @@ class _ResidentComplaintsScreenState extends State<ResidentComplaintsScreen> {
                                     style: TextStyle(color: Color(0xFF6B7280), fontSize: 13, height: 1.4),
                                   ),
                                   const SizedBox(height: 20),
-                                  OutlinedButton.icon(
-                                    onPressed: _showCreateComplaintSheet,
-                                    icon: const Icon(Icons.add, size: 18),
-                                    label: const Text('Raise Complaint Now'),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFF111827),
-                                      side: const BorderSide(color: Color(0xFF111827)),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                                    ),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      OutlinedButton.icon(
+                                        onPressed: _showCreateComplaintSheet,
+                                        icon: const Icon(Icons.add, size: 18),
+                                        label: const Text('Raise Complaint Now'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: const Color(0xFF111827),
+                                          side: const BorderSide(color: Color(0xFF111827)),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                        ),
+                                      ),
+                                      if (_isManagement && _showOnlyMyComplaints) ...[
+                                        const SizedBox(width: 10),
+                                        ElevatedButton.icon(
+                                          onPressed: () {
+                                            setState(() => _showOnlyMyComplaints = false);
+                                            _loadComplaints();
+                                          },
+                                          icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
+                                          label: const Text('View All'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF2563EB),
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ],
                               ),

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthUser {
@@ -98,11 +99,51 @@ class AuthSessionStore {
   Future<String?> readAccessToken() => _storage.read(key: accessTokenKey);
   Future<String?> readRefreshToken() => _storage.read(key: refreshTokenKey);
 
-  Future<String?> readUserRole() => _storage.read(key: userRoleKey);
+  Future<String?> readUserRole() async {
+    final value = await _storage.read(key: userRoleKey);
+    if (value != null && value.trim().isNotEmpty) return value.trim();
+    try {
+      final token = await readAccessToken();
+      if (token != null && token.contains('.')) {
+        final parts = token.split('.');
+        if (parts.length >= 2) {
+          final normalized = base64Url.normalize(parts[1]);
+          final payloadStr = utf8.decode(base64Url.decode(normalized));
+          final payload = jsonDecode(payloadStr) as Map<String, dynamic>;
+          final role = payload['role']?.toString();
+          if (role != null && role.isNotEmpty) {
+            await _storage.write(key: userRoleKey, value: role);
+            return role;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
 
   Future<int?> readUserId() async {
     final value = await _storage.read(key: userIdKey);
-    return int.tryParse(value ?? '');
+    final parsed = int.tryParse(value ?? '');
+    if (parsed != null) return parsed;
+    try {
+      final token = await readAccessToken();
+      if (token != null && token.contains('.')) {
+        final parts = token.split('.');
+        if (parts.length >= 2) {
+          final normalized = base64Url.normalize(parts[1]);
+          final payloadStr = utf8.decode(base64Url.decode(normalized));
+          final payload = jsonDecode(payloadStr) as Map<String, dynamic>;
+          final tokenUserId = int.tryParse(
+            (payload['userId'] ?? payload['id'] ?? payload['sub'])?.toString() ?? '',
+          );
+          if (tokenUserId != null) {
+            await _storage.write(key: userIdKey, value: tokenUserId.toString());
+            return tokenUserId;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<void> clearSession() async {
